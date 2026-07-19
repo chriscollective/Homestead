@@ -12,6 +12,7 @@ import {
   forestCoverageRatio,
   spacingConflicts,
 } from '../engine/metrics';
+import { synergyHints } from '../engine/permaculture';
 import { zoneWarnings } from '../engine/zones';
 import { useProjectStore } from '../store/useProjectStore';
 
@@ -29,6 +30,7 @@ export function Dashboard() {
   }, [project, areaM2, viewYear]);
 
   const warnings = useMemo(() => zoneWarnings(project), [project]);
+  const synergies = useMemo(() => synergyHints(project), [project]);
 
   const stats = useMemo(() => elementStats(project), [project]);
   const conflictCount = useMemo(
@@ -95,6 +97,11 @@ export function Dashboard() {
           {warnings.map((w) => (
             <div key={w.elementId} className="warning">
               🧭 {w.message}
+            </div>
+          ))}
+          {synergies.map((h, i) => (
+            <div key={i} className={h.kind === 'good' ? 'advice' : 'warning'}>
+              {h.message}
             </div>
           ))}
         </>

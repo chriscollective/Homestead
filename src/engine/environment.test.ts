@@ -112,6 +112,7 @@ const camphor: PlantSpecies = {
   needs: { sun: 'full', water: 2, windTolerance: 3 },
   climateZones: ['north'],
   tags: ['windbreak'],
+  forestLayer: 'canopy',
   isNative: true,
   sources: [],
 };
@@ -147,6 +148,7 @@ function makeProject(elements: HomesteadProject['elements']): HomesteadProject {
       people: 4,
       windTurbineKw: 0,
       windClass: 'normal',
+      showSectors: false,
     },
   };
 }

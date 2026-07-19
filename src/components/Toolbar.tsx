@@ -7,6 +7,7 @@ const TOOLS: { id: Tool; icon: string; label: string }[] = [
   { id: 'plant', icon: '🌳', label: '放置植栽' },
   { id: 'area', icon: '▦', label: '繪製區塊' },
   { id: 'pond', icon: '💧', label: '繪製池塘' },
+  { id: 'swale', icon: '〰', label: '集水溝' },
   { id: 'building', icon: '🏘', label: '放置建物' },
   { id: 'terrain', icon: '⛰', label: '地形' },
   { id: 'profile', icon: '📈', label: '剖面' },
@@ -18,6 +19,7 @@ const AREA_TYPES: { id: AreaType; label: string }[] = [
   { id: 'forest', label: '林地' },
   { id: 'garden', label: '菜園' },
   { id: 'meadow', label: '草地' },
+  { id: 'food_forest', label: '食物森林' },
 ];
 
 export function Toolbar() {

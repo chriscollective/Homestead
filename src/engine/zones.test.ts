@@ -35,6 +35,7 @@ function makeProject(
       people: 4,
       windTurbineKw: 0,
       windClass: 'normal',
+      showSectors: false,
     },
   };
 }

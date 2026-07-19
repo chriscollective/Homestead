@@ -1,16 +1,24 @@
 import { useMemo } from 'react';
 import { BUILDING_MODELS, buildingModelById, facingLabel } from '../data/buildings';
 import { CATEGORY_LABELS, PLANT_SPECIES, speciesById } from '../data/plants';
-import { polygonArea, polygonPerimeter } from '../engine/geometry';
+import { polygonArea, polygonPerimeter, polylineLength } from '../engine/geometry';
+import {
+  ALL_LAYERS,
+  foodForestLayers,
+  LAYER_LABELS,
+  MANUAL_LAYERS,
+  swaleLevelness,
+} from '../engine/permaculture';
 import { futureShadeYear, shadeFactorAt, solarRoofKwh } from '../engine/energy';
 import { dayOfYearForMonth, solarPosition } from '../engine/sun';
 import { useProjectStore } from '../store/useProjectStore';
-import type { AreaType, BuildingElement } from '../types';
+import type { AreaElement, AreaType, BuildingElement, ForestLayer } from '../types';
 
 const AREA_LABELS: Record<AreaType, string> = {
   forest: '林地',
   garden: '菜園',
   meadow: '草地',
+  food_forest: '食物森林',
 };
 
 /** M12 屋頂光電估算 + 未來樹蔭遮蔽警示 */
@@ -37,6 +45,60 @@ function SolarEstimate({ building }: { building: BuildingElement }) {
       )}
       {est.factor < 0.7 && <div>⚠ 目前已有明顯樹蔭遮蔽,發電效益偏低</div>}
       <div>規劃參考值;實際安裝需專業評估</div>
+    </div>
+  );
+}
+
+/** M13 食物森林層次完整度:區塊內植物自動偵測 + 草本類手動勾選 */
+function FoodForestLayers({ area }: { area: AreaElement }) {
+  const project = useProjectStore((s) => s.project);
+  const commit = useProjectStore((s) => s.commit);
+  const report = useMemo(
+    () => foodForestLayers(project, area.id, speciesById),
+    [project, area.id]
+  );
+  if (!report) return null;
+  const toggleManual = (layer: ForestLayer) => {
+    commit((p) => ({
+      ...p,
+      elements: p.elements.map((el) => {
+        if (el.id !== area.id || el.kind !== 'area') return el;
+        const set = new Set(el.manualLayers ?? []);
+        if (set.has(layer)) set.delete(layer);
+        else set.add(layer);
+        return { ...el, manualLayers: [...set] };
+      }),
+    }));
+  };
+  return (
+    <div className="species-detail">
+      <strong>七層結構檢查({report.present.length}/7)</strong>
+      {ALL_LAYERS.map((l) => {
+        const present = report.present.includes(l);
+        const manual = MANUAL_LAYERS.includes(l);
+        return (
+          <div key={l}>
+            {manual ? (
+              <label style={{ cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={(area.manualLayers ?? []).includes(l)}
+                  onChange={() => toggleManual(l)}
+                />{' '}
+                {LAYER_LABELS[l]}(草本類以配方勾選)
+              </label>
+            ) : (
+              <span>
+                {present ? '✓' : '✗'} {LAYER_LABELS[l]}
+                {!present && ' — 在區塊內種植此層物種'}
+              </span>
+            )}
+          </div>
+        );
+      })}
+      {report.missing.includes('groundcover') && (
+        <div>⚠ 缺地被層:裸露土壤易生雜草與水分流失</div>
+      )}
     </div>
   );
 }
@@ -221,6 +283,7 @@ export function PropertiesPanel() {
           <span>面積</span>
           <strong>{Math.round(polygonArea(element.polygon)).toLocaleString()} ㎡</strong>
         </div>
+        {element.areaType === 'food_forest' && <FoodForestLayers area={element} />}
         <label className="field">
           <span>備註</span>
           <textarea value={element.note ?? ''} onChange={(e) => setNote(e.target.value)} rows={2} />
@@ -316,6 +379,38 @@ export function PropertiesPanel() {
         </label>
         <button className="danger-btn" onClick={remove}>
           刪除建物
+        </button>
+      </div>
+    );
+  }
+
+  // swale 等高集水溝(M13)
+  if (element.kind === 'swale') {
+    const levelness = swaleLevelness(project, element.line);
+    return (
+      <div className="panel properties">
+        <h3>等高集水溝(swale)</h3>
+        <div className="stat-row">
+          <span>長度</span>
+          <strong>{Math.round(polylineLength(element.line))} m</strong>
+        </div>
+        {levelness !== null ? (
+          levelness <= 0.3 ? (
+            <div className="species-detail">✓ 線上高差 {levelness.toFixed(1)}m — 貼合等高線,能有效攔截逕流入滲</div>
+          ) : (
+            <div className="species-detail">
+              ⚠ 線上高差 {levelness.toFixed(1)}m — swale 應沿等高線開挖(建議高差 ≤0.3m),請開啟等高線圖層對照調整頂點
+            </div>
+          )
+        ) : (
+          <div className="species-detail">尚無地形資料 — 用「⛰ 地形」塑形後可檢查是否貼合等高線</div>
+        )}
+        <label className="field">
+          <span>備註</span>
+          <textarea value={element.note ?? ''} onChange={(e) => setNote(e.target.value)} rows={2} />
+        </label>
+        <button className="danger-btn" onClick={remove}>
+          刪除集水溝
         </button>
       </div>
     );

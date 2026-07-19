@@ -16,6 +16,7 @@ const camphor: PlantSpecies = {
   needs: { sun: 'full', water: 2, windTolerance: 3 },
   climateZones: ['north'],
   tags: [],
+  forestLayer: 'canopy',
   isNative: true,
   sources: [],
 };
@@ -36,7 +37,7 @@ function makeProject(elements: HomesteadProject['elements']): HomesteadProject {
       northAngle: 0, gridVisible: true, gridSize: 5, showContours: false, showSlope: false,
       showZones: false, contourInterval: 1, homePosition: null, showShadows: false,
       showInsolation: false, showFlow: false, showWind: false, sunMonth: 6, sunHour: 12,
-      windDir: 'NE', people: 4, windTurbineKw: 0, windClass: 'normal',
+      windDir: 'NE', people: 4, windTurbineKw: 0, windClass: 'normal', showSectors: false,
     },
   };
 }

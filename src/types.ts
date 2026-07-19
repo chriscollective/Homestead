@@ -15,6 +15,16 @@ export type ClimateZone = 'north' | 'central' | 'south' | 'east' | 'mountain';
 
 export type PlantCategory = 'tree_fruit' | 'tree_forest' | 'shrub' | 'bamboo';
 
+// M13 食物森林層次
+export type ForestLayer =
+  | 'canopy' // 樹冠層
+  | 'understory' // 林下層
+  | 'shrub' // 灌木層
+  | 'herb' // 草本層
+  | 'groundcover' // 地被層
+  | 'vine' // 爬藤層
+  | 'root'; // 根系層
+
 export type PlantTag =
   | 'windbreak' // 防風
   | 'nectar' // 蜜源
@@ -48,13 +58,14 @@ export interface PlantSpecies {
     kcalPerKg: number; // 熱量密度(供 M9)
   };
   tags: PlantTag[];
+  forestLayer: ForestLayer; // 所屬食物森林層次(M13)
   isNative: boolean;
   sources: string[]; // 資料來源標註(規格書 M3)
 }
 
 // ── 放置元素(discriminated union)──
 
-export type AreaType = 'forest' | 'garden' | 'meadow';
+export type AreaType = 'forest' | 'garden' | 'meadow' | 'food_forest';
 
 export interface PlantElement {
   id: string;
@@ -71,6 +82,16 @@ export interface AreaElement {
   kind: 'area';
   areaType: AreaType;
   polygon: Point[];
+  /** 食物森林:草本/地被/爬藤/根系層以配方勾選(P1 蔬菜草本以區塊抽象處理) */
+  manualLayers?: ForestLayer[];
+  note?: string;
+}
+
+/** 等高集水溝(swale,M13)*/
+export interface SwaleElement {
+  id: string;
+  kind: 'swale';
+  line: Point[];
   note?: string;
 }
 
@@ -95,7 +116,7 @@ export interface BuildingElement {
   note?: string;
 }
 
-export type PlacedElement = PlantElement | AreaElement | WaterElement | BuildingElement;
+export type PlacedElement = PlantElement | AreaElement | WaterElement | BuildingElement | SwaleElement;
 
 // ── 地勢(M5)──
 
@@ -132,6 +153,8 @@ export interface ProjectSettings {
   // M12 能源
   windTurbineKw: number; // 0 = 無風機
   windClass: 'strong' | 'normal' | 'weak';
+  // M13 扇形分析
+  showSectors: boolean;
 }
 
 export interface HomesteadProject {
