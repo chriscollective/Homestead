@@ -67,3 +67,30 @@ describe('M12 能源', () => {
     expect(windTurbineKwh(0, 'normal')).toBe(0);
   });
 });
+
+// ── M12 微水力 ──
+
+import type { Terrain } from '../types';
+import { microHydroKwh, streamHead } from './energy';
+
+describe('M12 微水力', () => {
+  it('P = ρgQHη:Q=10L/s、H=5m、η=0.6 → 約 294W → 年發電約 1805 度(含枯水折減)', () => {
+    expect(microHydroKwh(10, 5)).toBeCloseTo((9.81 * 10 * 5 * 0.6 * 8760 * 0.7) / 1000, 1);
+    expect(microHydroKwh(0, 5)).toBe(0);
+  });
+
+  it('streamHead 沿地形取線上最高最低差', () => {
+    const terrain: Terrain = {
+      resolution: 10,
+      origin: { x: 0, y: 0 },
+      cols: 11,
+      rows: 2,
+      grid: [
+        [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+        [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+      ],
+    };
+    expect(streamHead(terrain, [{ x: 0, y: 5 }, { x: 100, y: 5 }])).toBeCloseTo(10);
+    expect(streamHead(terrain, [{ x: 50, y: 5 }, { x: 50, y: 8 }])).toBeCloseTo(0);
+  });
+});

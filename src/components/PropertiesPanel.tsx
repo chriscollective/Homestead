@@ -9,7 +9,13 @@ import {
   MANUAL_LAYERS,
   swaleLevelness,
 } from '../engine/permaculture';
-import { futureShadeYear, shadeFactorAt, solarRoofKwh } from '../engine/energy';
+import {
+  futureShadeYear,
+  microHydroKwh,
+  shadeFactorAt,
+  solarRoofKwh,
+  streamHead,
+} from '../engine/energy';
 import { dayOfYearForMonth, solarPosition } from '../engine/sun';
 import { useProjectStore } from '../store/useProjectStore';
 import type { AreaElement, AreaType, BuildingElement, ForestLayer } from '../types';
@@ -411,6 +417,63 @@ export function PropertiesPanel() {
         </label>
         <button className="danger-btn" onClick={remove}>
           刪除集水溝
+        </button>
+      </div>
+    );
+  }
+
+  // 溪流(M2/M12 微水力)
+  if (element.kind === 'stream') {
+    const head = project.terrain ? streamHead(project.terrain, element.line) : null;
+    const flow = element.flowLps ?? 0;
+    const kwh = head !== null && flow > 0 ? microHydroKwh(flow, head) : null;
+    return (
+      <div className="panel properties">
+        <h3>溪流</h3>
+        <div className="stat-row">
+          <span>長度</span>
+          <strong>{Math.round(polylineLength(element.line))} m</strong>
+        </div>
+        <div className="stat-row">
+          <span>落差(head)</span>
+          <strong>{head !== null ? `${head.toFixed(1)} m` : '需地形資料'}</strong>
+        </div>
+        <label className="field">
+          <span>常流量估計(L/s,0 = 不設微水力)</span>
+          <input
+            type="number"
+            min={0}
+            max={500}
+            value={flow}
+            onChange={(e) =>
+              commit((p) => ({
+                ...p,
+                elements: p.elements.map((el) =>
+                  el.id === element.id && el.kind === 'stream'
+                    ? { ...el, flowLps: Math.max(Number(e.target.value) || 0, 0) }
+                    : el
+                ),
+              }))
+            }
+          />
+        </label>
+        {kwh !== null && (
+          <div className="species-detail">
+            ⚡ 微水力估年發電約 <strong>{Math.round(kwh).toLocaleString()} 度</strong>
+            (P = ρgQHη,η=0.6,含枯水期折減 0.7)
+            <div>💧 頭差來自 M5 地勢沿線自動計算;繪製方向建議上游 → 下游</div>
+            <div>⚠ 法規提醒:台灣引水發電須申請水權(水利法),實際設置前請洽主管機關</div>
+          </div>
+        )}
+        {head === null && (
+          <small>用「⛰ 地形」塑形後會自動計算沿線落差</small>
+        )}
+        <label className="field">
+          <span>備註</span>
+          <textarea value={element.note ?? ''} onChange={(e) => setNote(e.target.value)} rows={2} />
+        </label>
+        <button className="danger-btn" onClick={remove}>
+          刪除溪流
         </button>
       </div>
     );

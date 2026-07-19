@@ -17,6 +17,7 @@ export type Tool =
   | 'plant'
   | 'area'
   | 'pond'
+  | 'stream'
   | 'swale'
   | 'building'
   | 'measure'

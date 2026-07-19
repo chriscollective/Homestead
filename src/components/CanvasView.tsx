@@ -182,11 +182,16 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
   const finishDraft = useCallback(() => {
     const clean = dedupe(draftRef.current);
     setDraft([]);
-    if (tool === 'swale') {
+    if (tool === 'swale' || tool === 'stream') {
       if (clean.length >= 2) {
         commit((p) => ({
           ...p,
-          elements: [...p.elements, { id: newId('swale'), kind: 'swale', line: clean }],
+          elements: [
+            ...p.elements,
+            tool === 'swale'
+              ? { id: newId('swale'), kind: 'swale', line: clean }
+              : { id: newId('stream'), kind: 'stream', line: clean },
+          ],
         }));
       }
       return;
@@ -271,9 +276,13 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
     const p = toWorld(e.clientX, e.clientY);
     if (tool === 'select') {
       startPan(e);
-    } else if (tool === 'boundary' || tool === 'area' || tool === 'pond' || tool === 'swale') {
+    } else if (tool === 'boundary' ||
+      tool === 'area' ||
+      tool === 'pond' ||
+      tool === 'swale' ||
+      tool === 'stream') {
       // 點擊起點附近 → 閉合(swale 為開放線,不閉合)
-      if (tool !== 'swale' && draft.length >= 3 && distance(p, draft[0]) < 12 / view.scale) {
+      if (tool !== 'swale' && tool !== 'stream' && draft.length >= 3 && distance(p, draft[0]) < 12 / view.scale) {
         finishDraft();
         return;
       }
@@ -361,7 +370,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
           if (el.kind === 'area' || el.kind === 'water') {
             return { ...el, polygon: el.polygon.map((q) => ({ x: q.x + dx, y: q.y + dy })) };
           }
-          if (el.kind === 'swale') {
+          if (el.kind === 'swale' || el.kind === 'stream') {
             return { ...el, line: el.line.map((q) => ({ x: q.x + dx, y: q.y + dy })) };
           }
           return el;
@@ -380,7 +389,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
             if (el.kind === 'area' || el.kind === 'water') {
               return { ...el, polygon: el.polygon.map((q, i) => (i === drag.index ? p : q)) };
             }
-            if (el.kind === 'swale') {
+            if (el.kind === 'swale' || el.kind === 'stream') {
               return { ...el, line: el.line.map((q, i) => (i === drag.index ? p : q)) };
             }
             return el;
@@ -450,7 +459,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
           if ((el.kind === 'area' || el.kind === 'water') && el.polygon.length > 3) {
             return { ...el, polygon: el.polygon.filter((_, i) => i !== index) };
           }
-          if (el.kind === 'swale' && el.line.length > 2) {
+          if ((el.kind === 'swale' || el.kind === 'stream') && el.line.length > 2) {
             return { ...el, line: el.line.filter((_, i) => i !== index) };
           }
           return el;
@@ -483,7 +492,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
             polygon.splice(index + 1, 0, p);
             return { ...el, polygon };
           }
-          if (el.kind === 'swale') {
+          if (el.kind === 'swale' || el.kind === 'stream') {
             const line = [...el.line];
             line.splice(index + 1, 0, p);
             return { ...el, line };
@@ -580,7 +589,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
     if (el && (el.kind === 'area' || el.kind === 'water')) {
       return { target: el.id, polygon: el.polygon, open: false };
     }
-    if (el && el.kind === 'swale') {
+    if (el && (el.kind === 'swale' || el.kind === 'stream')) {
       return { target: el.id, polygon: el.line, open: true };
     }
     return null;
@@ -593,6 +602,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
     area: `逐點點擊繪製${AREA_STYLES[areaType].label}區塊;雙擊完成`,
     pond: '逐點點擊繪製池塘;雙擊完成',
     swale: '沿等高線逐點繪製集水溝;雙擊完成(建議先開等高線圖層對照)',
+    stream: '沿溪流路徑逐點繪製(上游→下游);雙擊完成;屬性面板估微水力發電',
     building: `點擊放置「${buildingModelById.get(selectedBuildingId)?.label ?? ''}」(黑粗邊 = 正面/門)`,
     measure: '逐點點擊測距;Esc 清除',
     terrain: `地形筆刷:${{ raise: '抬升', lower: '下降', smooth: '平滑' }[brush.mode]}(拖曳塗抹;右側面板調整)`,
@@ -761,6 +771,27 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
               );
             }
             return null;
+          })}
+
+          {/* 溪流(M2/M12) */}
+          {project.elements.map((el) => {
+            if (el.kind !== 'stream') return null;
+            return (
+              <polyline
+                key={el.id}
+                points={pointsAttr(el.line)}
+                fill="none"
+                stroke={el.id === selectedId ? '#1d5a80' : '#2b6c96'}
+                strokeWidth={el.id === selectedId ? 6 : 5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity={0.75}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents={tool === 'select' ? 'stroke' : 'none'}
+                onPointerDown={(e) => onElementPointerDown(e, el)}
+                style={{ cursor: tool === 'select' ? 'move' : undefined }}
+              />
+            );
           })}
 
           {/* 等高集水溝 swale(M13) */}
@@ -1072,7 +1103,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
               <polyline
                 points={pointsAttr(cursor ? [...draft, cursor] : draft)}
                 fill={
-                  tool === 'swale'
+                  tool === 'swale' || tool === 'stream'
                     ? 'none'
                     : tool === 'pond'
                       ? 'rgba(103,169,207,0.25)'
@@ -1083,7 +1114,9 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                 stroke={
                   tool === 'swale'
                     ? '#0e7490'
-                    : tool === 'pond'
+                    : tool === 'stream'
+                      ? '#2b6c96'
+                      : tool === 'pond'
                       ? '#2b6c96'
                       : tool === 'area'
                         ? AREA_STYLES[areaType].stroke
