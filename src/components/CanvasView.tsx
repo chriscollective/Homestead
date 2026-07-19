@@ -39,6 +39,7 @@ type DragState =
   | { type: 'poly'; id: string; last: Point }
   | { type: 'vertex'; target: 'boundary' | string; index: number }
   | { type: 'brush' }
+  | { type: 'home' }
   | null;
 
 const AREA_STYLES: Record<AreaType, { fill: string; stroke: string; label: string }> = {
@@ -365,6 +366,8 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
       setView((v) => ({ ...v, tx: drag.startTx + dx, ty: drag.startTy + dy }));
     } else if (drag.type === 'brush') {
       applyTerrainBrush(p);
+    } else if (drag.type === 'home') {
+      updateSettings({ homePosition: p });
     } else if (drag.type === 'plant') {
       transient((proj) => ({
         ...proj,
@@ -1160,9 +1163,23 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
             </g>
           )}
 
-          {/* 住家標記(M13 Zone 0) */}
+          {/* 住家標記(M13 Zone 0):選取工具下可拖曳移動、右鍵移除 */}
           {home && (
-            <g pointerEvents="none">
+            <g
+              pointerEvents={tool === 'select' ? 'auto' : 'none'}
+              style={{ cursor: tool === 'select' ? 'move' : undefined }}
+              onPointerDown={(e) => {
+                if (tool !== 'select' || e.button !== 0) return;
+                e.stopPropagation();
+                dragRef.current = { type: 'home' };
+                svgRef.current?.setPointerCapture(e.pointerId);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                updateSettings({ homePosition: null });
+              }}
+            >
               <circle
                 cx={home.x}
                 cy={home.y}
