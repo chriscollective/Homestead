@@ -6,6 +6,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
+import { buildingModelById } from '../data/buildings';
 import { CATEGORY_LABELS, speciesById } from '../data/plants';
 import { boundingBox, distance, polygonArea, polylineLength } from '../engine/geometry';
 import { canopyRadiusAtAge, isPlantAlive, matureCanopyRadius } from '../engine/growth';
@@ -21,6 +22,7 @@ import {
 import { ZONE_RADII } from '../engine/zones';
 import { newId, useProjectStore } from '../store/useProjectStore';
 import type { AreaType, PlacedElement, Point } from '../types';
+import { AnalysisLayers } from './AnalysisLayers';
 
 interface View {
   scale: number; // px / m
@@ -67,6 +69,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
   const tool = useProjectStore((s) => s.tool);
   const areaType = useProjectStore((s) => s.areaType);
   const selectedSpeciesId = useProjectStore((s) => s.selectedSpeciesId);
+  const selectedBuildingId = useProjectStore((s) => s.selectedBuildingId);
   const selectedId = useProjectStore((s) => s.selectedId);
   const viewYear = useProjectStore((s) => s.viewYear);
   const brush = useProjectStore((s) => s.brush);
@@ -171,33 +174,31 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
     cancelDraft();
   }, [tool, cancelDraft]);
 
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+
+  // 注意:不可在 setDraft 的 updater 內呼叫 commit(副作用會被 React 重複執行)
   const finishDraft = useCallback(() => {
-    setDraft((points) => {
-      const clean = dedupe(points);
-      if (clean.length >= 3) {
-        if (tool === 'boundary') {
-          commit((p) => ({ ...p, boundary: clean }));
-          setTool('select');
-        } else if (tool === 'area') {
-          commit((p) => ({
-            ...p,
-            elements: [
-              ...p.elements,
-              { id: newId('area'), kind: 'area', areaType, polygon: clean },
-            ],
-          }));
-        } else if (tool === 'pond') {
-          commit((p) => ({
-            ...p,
-            elements: [
-              ...p.elements,
-              { id: newId('pond'), kind: 'water', waterType: 'pond', polygon: clean },
-            ],
-          }));
-        }
-      }
-      return [];
-    });
+    const clean = dedupe(draftRef.current);
+    setDraft([]);
+    if (clean.length < 3) return;
+    if (tool === 'boundary') {
+      commit((p) => ({ ...p, boundary: clean }));
+      setTool('select');
+    } else if (tool === 'area') {
+      commit((p) => ({
+        ...p,
+        elements: [...p.elements, { id: newId('area'), kind: 'area', areaType, polygon: clean }],
+      }));
+    } else if (tool === 'pond') {
+      commit((p) => ({
+        ...p,
+        elements: [
+          ...p.elements,
+          { id: newId('pond'), kind: 'water', waterType: 'pond', polygon: clean },
+        ],
+      }));
+    }
   }, [tool, areaType, commit, setTool]);
 
   // 鍵盤:Esc 取消、Delete 刪除選取元素
@@ -283,6 +284,25 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
           },
         ],
       }));
+    } else if (tool === 'building') {
+      const model = buildingModelById.get(selectedBuildingId);
+      if (!model) return;
+      commit((proj) => ({
+        ...proj,
+        elements: [
+          ...proj.elements,
+          {
+            id: newId('bld'),
+            kind: 'building',
+            modelId: model.id,
+            position: p,
+            rotationDeg: 0,
+            width: model.width,
+            depth: model.depth,
+            height: model.height,
+          },
+        ],
+      }));
     } else if (tool === 'measure') {
       setMeasure((m) => [...m, p]);
     } else if (tool === 'terrain') {
@@ -315,7 +335,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
       transient((proj) => ({
         ...proj,
         elements: proj.elements.map((el) =>
-          el.id === drag.id && el.kind === 'plant'
+          el.id === drag.id && (el.kind === 'plant' || el.kind === 'building')
             ? { ...el, position: { x: p.x - drag.offset.x, y: p.y - drag.offset.y } }
             : el
         ),
@@ -367,7 +387,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
     select(el.id);
     const p = toWorld(e.clientX, e.clientY);
     beginDrag();
-    if (el.kind === 'plant') {
+    if (el.kind === 'plant' || el.kind === 'building') {
       dragRef.current = {
         type: 'plant',
         id: el.id,
@@ -535,6 +555,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
     plant: `點擊放置「${speciesById.get(selectedSpeciesId)?.nameZh ?? ''}」(種植於第 ${viewYear} 年)`,
     area: `逐點點擊繪製${AREA_STYLES[areaType].label}區塊;雙擊完成`,
     pond: '逐點點擊繪製池塘;雙擊完成',
+    building: `點擊放置「${buildingModelById.get(selectedBuildingId)?.label ?? ''}」(黑粗邊 = 正面/門)`,
     measure: '逐點點擊測距;Esc 清除',
     terrain: `地形筆刷:${{ raise: '抬升', lower: '下降', smooth: '平滑' }[brush.mode]}(拖曳塗抹;右側面板調整)`,
     profile: project.terrain ? '點擊兩點顯示地形剖面;Esc 清除' : '尚無地形 — 請先用地形筆刷塑形',
@@ -560,7 +581,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
           cursor:
             tool === 'select'
               ? 'default'
-              : tool === 'plant' || tool === 'home'
+              : tool === 'plant' || tool === 'home' || tool === 'building'
                 ? 'copy'
                 : 'crosshair',
         }}
@@ -704,6 +725,55 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
             return null;
           })}
 
+          {/* 建物(M8) */}
+          {project.elements.map((el) => {
+            if (el.kind !== 'building') return null;
+            const model = buildingModelById.get(el.modelId);
+            const isSelected = el.id === selectedId;
+            return (
+              <g
+                key={el.id}
+                transform={`translate(${el.position.x},${el.position.y}) rotate(${el.rotationDeg})`}
+                pointerEvents={tool === 'select' ? 'auto' : 'none'}
+                onPointerDown={(e) => onElementPointerDown(e, el)}
+                style={{ cursor: tool === 'select' ? 'move' : undefined }}
+              >
+                <rect
+                  x={-el.width / 2}
+                  y={-el.depth / 2}
+                  width={el.width}
+                  height={el.depth}
+                  fill={model?.color ?? '#b39b7d'}
+                  stroke={isSelected ? '#1b4332' : '#6d5232'}
+                  strokeWidth={isSelected ? 2.5 : 1.5}
+                  vectorEffect="non-scaling-stroke"
+                  rx={0.3}
+                />
+                {/* 正面(門)標記:rotation 0 = 朝南(y+) */}
+                <line
+                  x1={-el.width / 6}
+                  y1={el.depth / 2}
+                  x2={el.width / 6}
+                  y2={el.depth / 2}
+                  stroke="#3d3425"
+                  strokeWidth={3}
+                  vectorEffect="non-scaling-stroke"
+                />
+                {view.scale > 2 && (
+                  <text
+                    y={-el.depth / 2 - 3 / view.scale}
+                    fontSize={12 / view.scale}
+                    fill="#3d3425"
+                    textAnchor="middle"
+                    transform={`rotate(${-el.rotationDeg})`}
+                  >
+                    {model?.label ?? '建物'}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+
           {/* 植栽(依時間軸年份呈現當年冠幅,M4) */}
           {project.elements.map((el) => {
             if (el.kind !== 'plant') return null;
@@ -778,6 +848,9 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
               />
             );
           })}
+
+          {/* 環境分析圖層(M7:陰影/日照/水流/風) */}
+          <AnalysisLayers project={project} viewYear={viewYear} />
 
           {/* 分區距離環(M13 分析層) */}
           {project.settings.showZones && home && (

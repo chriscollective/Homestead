@@ -25,6 +25,16 @@ function makeProject(
       showZones: true,
       contourInterval: 1,
       homePosition,
+      showShadows: false,
+      showInsolation: false,
+      showFlow: false,
+      showWind: false,
+      sunMonth: 6,
+      sunHour: 12,
+      windDir: 'NE',
+      people: 4,
+      windTurbineKw: 0,
+      windClass: 'normal',
     },
   };
 }

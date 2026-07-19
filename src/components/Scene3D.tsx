@@ -273,6 +273,28 @@ export default function Scene3D() {
               />
             );
           }
+          if (el.kind === 'building') {
+            const y = elevation(project.terrain, el.position);
+            return (
+              <group
+                key={el.id}
+                position={[el.position.x, y, el.position.y]}
+                rotation={[0, (-el.rotationDeg * Math.PI) / 180, 0]}
+              >
+                <mesh position={[0, el.height / 2, 0]} castShadow>
+                  <boxGeometry args={[el.width, el.height, el.depth]} />
+                  <meshStandardMaterial color="#d8c3a5" flatShading />
+                </mesh>
+                <mesh position={[0, el.height + Math.min(el.width, el.depth) * 0.18, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
+                  <coneGeometry
+                    args={[Math.hypot(el.width, el.depth) / 2, Math.min(el.width, el.depth) * 0.4, 4]}
+                  />
+                  <meshStandardMaterial color="#8d5b4c" flatShading />
+                </mesh>
+              </group>
+            );
+          }
+          if (el.kind !== 'plant') return null;
           const species = speciesById.get(el.speciesId);
           if (!species || !isPlantAlive(el.plantedYear, el.removedYear, viewYear)) return null;
           const age = viewYear - el.plantedYear;

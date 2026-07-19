@@ -160,6 +160,7 @@ export function StaticPlanSvg({
             />
           );
         }
+        if (el.kind !== 'plant') return null;
         const species = speciesById.get(el.speciesId);
         if (!species || !isPlantAlive(el.plantedYear, el.removedYear, year)) return null;
         const r = canopyRadiusAtAge(species.growth.canopyCurve, year - el.plantedYear);
