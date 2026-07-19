@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
 import { AnalysisPanel } from './components/AnalysisPanel';
+import { BuildingPalette } from './components/BuildingPalette';
 import { CanvasView } from './components/CanvasView';
 import { Dashboard } from './components/Dashboard';
 import { LayersPanel } from './components/LayersPanel';
@@ -162,6 +163,8 @@ export default function App() {
               <PropertiesPanel />
             ) : tool === 'plant' ? (
               <SpeciesPalette />
+            ) : tool === 'building' ? (
+              <BuildingPalette />
             ) : tool !== 'terrain' ? (
               <div className="panel tips">
                 <h3>操作提示</h3>

@@ -62,6 +62,17 @@ export function shadowShapes(
   const shapes: ShadowShape[] = [];
   if (sun.elevationDeg <= 0.5) return shapes;
   for (const el of project.elements) {
+    // 建物陰影(M8):以外接圓近似
+    if (el.kind === 'building') {
+      const vec = shadowVector(sun, el.height * 0.8);
+      if (!vec) continue;
+      shapes.push({
+        center: { x: el.position.x + vec.x, y: el.position.y + vec.y },
+        radius: Math.max(el.width, el.depth) / 2,
+        anchor: el.position,
+      });
+      continue;
+    }
     if (el.kind !== 'plant') continue;
     if (!isPlantAlive(el.plantedYear, el.removedYear, viewYear)) continue;
     const species = speciesById.get(el.speciesId);

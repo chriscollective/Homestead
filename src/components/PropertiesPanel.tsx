@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
+import { BUILDING_MODELS, buildingModelById, facingLabel } from '../data/buildings';
 import { CATEGORY_LABELS, PLANT_SPECIES, speciesById } from '../data/plants';
 import { polygonArea, polygonPerimeter } from '../engine/geometry';
+import { dayOfYearForMonth, solarPosition } from '../engine/sun';
 import { useProjectStore } from '../store/useProjectStore';
 import type { AreaType } from '../types';
 
@@ -197,6 +199,74 @@ export function PropertiesPanel() {
         <small>拖曳可整塊移動;拖曳頂點修改形狀;右鍵頂點刪除。</small>
         <button className="danger-btn" onClick={remove}>
           刪除區塊
+        </button>
+      </div>
+    );
+  }
+
+  if (element.kind === 'building') {
+    const model = buildingModelById.get(element.modelId);
+    const facing = facingLabel(element.rotationDeg);
+    const winterNoon = solarPosition(23.5, dayOfYearForMonth(12), 12);
+    const goodOrientation = facing === '南' || facing === '東南' || facing === '西南';
+    return (
+      <div className="panel properties">
+        <h3>{model?.label ?? '建物'}</h3>
+        <label className="field">
+          <span>房型</span>
+          <select
+            value={element.modelId}
+            onChange={(e) => {
+              const m = buildingModelById.get(e.target.value);
+              if (!m) return;
+              commit((p) => ({
+                ...p,
+                elements: p.elements.map((el) =>
+                  el.id === element.id && el.kind === 'building'
+                    ? { ...el, modelId: m.id, width: m.width, depth: m.depth, height: m.height }
+                    : el
+                ),
+              }));
+            }}
+          >
+            {BUILDING_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}({m.width}×{m.depth}m)
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>朝向:{element.rotationDeg}°(正面朝{facing})</span>
+          <input
+            type="range"
+            min={0}
+            max={359}
+            value={element.rotationDeg}
+            onChange={(e) =>
+              commit((p) => ({
+                ...p,
+                elements: p.elements.map((el) =>
+                  el.id === element.id && el.kind === 'building'
+                    ? { ...el, rotationDeg: Number(e.target.value) }
+                    : el
+                ),
+              }))
+            }
+          />
+        </label>
+        <div className="species-detail">
+          {goodOrientation
+            ? `✓ 正面朝${facing} — 冬季日照佳(冬至正午太陽仰角約 ${winterNoon.elevationDeg.toFixed(0)}°,自南方照入)`
+            : `⚠ 正面朝${facing} — 台灣主要日照來自南方,建議主要開窗面朝南/東南,冬暖夏涼`}
+          <div>提示:西曬面建議種落葉樹遮蔭;開啟「環境分析 → 樹冠陰影」檢查建物與樹的相互遮蔽</div>
+        </div>
+        <label className="field">
+          <span>備註</span>
+          <textarea value={element.note ?? ''} onChange={(e) => setNote(e.target.value)} rows={2} />
+        </label>
+        <button className="danger-btn" onClick={remove}>
+          刪除建物
         </button>
       </div>
     );

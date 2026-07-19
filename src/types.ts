@@ -82,7 +82,19 @@ export interface WaterElement {
   note?: string;
 }
 
-export type PlacedElement = PlantElement | AreaElement | WaterElement;
+export interface BuildingElement {
+  id: string;
+  kind: 'building';
+  modelId: string; // 預設房型 id(M8)
+  position: Point; // 中心點
+  rotationDeg: number; // 0 = 正面朝南,順時針
+  width: number; // 面寬(m)
+  depth: number; // 進深(m)
+  height: number; // 簷高/總高(m)
+  note?: string;
+}
+
+export type PlacedElement = PlantElement | AreaElement | WaterElement | BuildingElement;
 
 // ── 地勢(M5)──
 

@@ -17,6 +17,7 @@ export type Tool =
   | 'plant'
   | 'area'
   | 'pond'
+  | 'building'
   | 'measure'
   | 'terrain'
   | 'profile'
@@ -159,6 +160,7 @@ interface ProjectState {
   tool: Tool;
   areaType: AreaType;
   selectedSpeciesId: string;
+  selectedBuildingId: string; // M8 選定房型
   selectedId: string | null; // 元素 id 或 'boundary'
   viewYear: number; // M4 時間軸目前年份
   viewMode: ViewMode; // 2D / 3D
@@ -168,6 +170,7 @@ interface ProjectState {
   setTool: (tool: Tool) => void;
   setAreaType: (t: AreaType) => void;
   setSelectedSpecies: (id: string) => void;
+  setSelectedBuilding: (id: string) => void;
   select: (id: string | null) => void;
   setViewYear: (year: number) => void;
   setViewMode: (mode: ViewMode) => void;
@@ -199,6 +202,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   tool: 'select',
   areaType: 'forest',
   selectedSpeciesId: 'mango',
+  selectedBuildingId: 'cabin',
   selectedId: null,
   viewYear: 10,
   viewMode: '2d',
@@ -207,6 +211,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setTool: (tool) => set({ tool, selectedId: null }),
   setAreaType: (areaType) => set({ areaType }),
   setSelectedSpecies: (selectedSpeciesId) => set({ selectedSpeciesId }),
+  setSelectedBuilding: (selectedBuildingId) => set({ selectedBuildingId }),
   select: (selectedId) => set({ selectedId }),
   setViewYear: (viewYear) => set({ viewYear }),
   setViewMode: (viewMode) => set({ viewMode }),

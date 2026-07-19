@@ -177,6 +177,32 @@ describe('風向與防風', () => {
   });
 });
 
+// ── M8 建物陰影 ──
+
+import { shadowShapes } from './sun';
+
+describe('建物陰影(M8)', () => {
+  it('建物投影納入陰影分析,冬至正午影子在建物北側', () => {
+    const project = makeProject([
+      {
+        id: 'b1',
+        kind: 'building',
+        modelId: 'cabin',
+        position: { x: 50, y: 50 },
+        rotationDeg: 0,
+        width: 6,
+        depth: 5,
+        height: 4,
+      },
+    ]);
+    const sun = solarPosition(23.45, 355, 12);
+    const shapes = shadowShapes(project, speciesMap, 10, sun);
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0].center.y).toBeLessThan(50); // 北側
+    expect(shapes[0].radius).toBe(3); // max(6,5)/2
+  });
+});
+
 // ── M9 自給自足 ──
 
 const mango: PlantSpecies = {
