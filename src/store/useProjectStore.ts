@@ -70,6 +70,8 @@ function defaultSettings(): ProjectSettings {
     sunHour: 14,
     windDir: 'NE',
     people: 4,
+    windTurbineKw: 0,
+    windClass: 'normal',
   };
 }
 

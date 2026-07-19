@@ -91,6 +91,7 @@ export interface BuildingElement {
   width: number; // 面寬(m)
   depth: number; // 進深(m)
   height: number; // 簷高/總高(m)
+  solarRoofM2?: number; // 屋頂光電板面積(M12)
   note?: string;
 }
 
@@ -128,6 +129,9 @@ export interface ProjectSettings {
   windDir: 'NE' | 'SW' | 'E';
   // M9 自給自足
   people: number;
+  // M12 能源
+  windTurbineKw: number; // 0 = 無風機
+  windClass: 'strong' | 'normal' | 'weak';
 }
 
 export interface HomesteadProject {

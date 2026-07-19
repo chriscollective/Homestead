@@ -33,6 +33,8 @@ function makeProject(
       sunHour: 12,
       windDir: 'NE',
       people: 4,
+      windTurbineKw: 0,
+      windClass: 'normal',
     },
   };
 }

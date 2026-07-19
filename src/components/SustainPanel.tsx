@@ -1,6 +1,14 @@
 // M9 自給自足儀表板
 import { useMemo } from 'react';
 import { speciesById } from '../data/plants';
+import {
+  KWH_PER_PERSON_YEAR,
+  shadeFactorAt,
+  solarRoofKwh,
+  WIND_CLASS_LABELS,
+  windTurbineKwh,
+  type WindClass,
+} from '../engine/energy';
 import { selfSufficiency } from '../engine/sustain';
 import { useProjectStore } from '../store/useProjectStore';
 
@@ -18,6 +26,66 @@ function RatioBar({ label, ratio, detail }: { label: string; ratio: number; deta
       </div>
       <small>{detail}</small>
     </div>
+  );
+}
+
+/** M12 能源自給率(併入 M9 儀表板) */
+function EnergySection() {
+  const project = useProjectStore((s) => s.project);
+  const viewYear = useProjectStore((s) => s.viewYear);
+  const updateSettings = useProjectStore((s) => s.updateSettings);
+  const { people, windTurbineKw, windClass } = project.settings;
+
+  const energy = useMemo(() => {
+    let solar = 0;
+    for (const el of project.elements) {
+      if (el.kind === 'building' && (el.solarRoofM2 ?? 0) > 0) {
+        solar += solarRoofKwh(el.solarRoofM2!, shadeFactorAt(project, speciesById, viewYear, el));
+      }
+    }
+    const wind = windTurbineKwh(windTurbineKw, windClass);
+    const need = people * KWH_PER_PERSON_YEAR;
+    return { solar, wind, need, ratio: need > 0 ? (solar + wind) / need : 0 };
+  }, [project, viewYear, windTurbineKw, windClass, people]);
+
+  return (
+    <>
+      <RatioBar
+        label="⚡ 能源"
+        ratio={energy.ratio}
+        detail={`太陽能 ${Math.round(energy.solar)} + 風力 ${Math.round(
+          energy.wind
+        )} 度/年 vs 需求約 ${energy.need} 度(在建物屬性設光電板;冬季東北季風與夏季日照互補)`}
+      />
+      <label className="field">
+        <span>小型風機(kW,0 = 無)</span>
+        <input
+          type="number"
+          min={0}
+          max={20}
+          step={0.5}
+          value={windTurbineKw}
+          onChange={(e) =>
+            updateSettings({ windTurbineKw: Math.max(Number(e.target.value) || 0, 0) })
+          }
+        />
+      </label>
+      {windTurbineKw > 0 && (
+        <label className="field">
+          <span>風區等級</span>
+          <select
+            value={windClass}
+            onChange={(e) => updateSettings({ windClass: e.target.value as WindClass })}
+          >
+            {(Object.keys(WIND_CLASS_LABELS) as WindClass[]).map((c) => (
+              <option key={c} value={c}>
+                {WIND_CLASS_LABELS[c]}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </>
   );
 }
 
@@ -64,6 +132,7 @@ export function SustainPanel() {
         ratio={report.firewoodRatio}
         detail={`林地永續採伐約 ${report.firewoodSupplyT.toFixed(1)} 噸/年 vs 家庭需求 2 噸`}
       />
+      <EnergySection />
       <small className="analysis-note">估算值僅供規劃參考;拉動時間軸看自給率成長曲線</small>
     </div>
   );

@@ -2,15 +2,44 @@ import { useMemo } from 'react';
 import { BUILDING_MODELS, buildingModelById, facingLabel } from '../data/buildings';
 import { CATEGORY_LABELS, PLANT_SPECIES, speciesById } from '../data/plants';
 import { polygonArea, polygonPerimeter } from '../engine/geometry';
+import { futureShadeYear, shadeFactorAt, solarRoofKwh } from '../engine/energy';
 import { dayOfYearForMonth, solarPosition } from '../engine/sun';
 import { useProjectStore } from '../store/useProjectStore';
-import type { AreaType } from '../types';
+import type { AreaType, BuildingElement } from '../types';
 
 const AREA_LABELS: Record<AreaType, string> = {
   forest: '林地',
   garden: '菜園',
   meadow: '草地',
 };
+
+/** M12 屋頂光電估算 + 未來樹蔭遮蔽警示 */
+function SolarEstimate({ building }: { building: BuildingElement }) {
+  const project = useProjectStore((s) => s.project);
+  const viewYear = useProjectStore((s) => s.viewYear);
+  const area = building.solarRoofM2 ?? 0;
+  const est = useMemo(() => {
+    if (area <= 0) return null;
+    const factor = shadeFactorAt(project, speciesById, viewYear, building);
+    return {
+      factor,
+      kwh: solarRoofKwh(area, factor),
+      shadeYear: futureShadeYear(project, speciesById, viewYear, building),
+    };
+  }, [area, project, viewYear, building]);
+  if (!est) return null;
+  return (
+    <div className="species-detail">
+      ☀ 第 {viewYear} 年估年發電約 <strong>{Math.round(est.kwh).toLocaleString()} 度</strong>
+      (日照係數 {(est.factor * 100).toFixed(0)}%)
+      {est.shadeYear !== null && est.shadeYear > viewYear && (
+        <div>⚠ 依時間軸模擬,約第 {est.shadeYear} 年起面板將被長大的樹冠明顯遮蔽,建議調整樹或面板位置</div>
+      )}
+      {est.factor < 0.7 && <div>⚠ 目前已有明顯樹蔭遮蔽,發電效益偏低</div>}
+      <div>規劃參考值;實際安裝需專業評估</div>
+    </div>
+  );
+}
 
 export function PropertiesPanel() {
   const project = useProjectStore((s) => s.project);
@@ -261,6 +290,26 @@ export function PropertiesPanel() {
             : `⚠ 正面朝${facing} — 台灣主要日照來自南方,建議主要開窗面朝南/東南,冬暖夏涼`}
           <div>提示:西曬面建議種落葉樹遮蔭;開啟「環境分析 → 樹冠陰影」檢查建物與樹的相互遮蔽</div>
         </div>
+        <label className="field">
+          <span>屋頂光電板面積(㎡,0 = 無;M12)</span>
+          <input
+            type="number"
+            min={0}
+            max={Math.round(element.width * element.depth)}
+            value={element.solarRoofM2 ?? 0}
+            onChange={(e) =>
+              commit((p) => ({
+                ...p,
+                elements: p.elements.map((el) =>
+                  el.id === element.id && el.kind === 'building'
+                    ? { ...el, solarRoofM2: Math.max(Number(e.target.value) || 0, 0) }
+                    : el
+                ),
+              }))
+            }
+          />
+        </label>
+        <SolarEstimate building={element} />
         <label className="field">
           <span>備註</span>
           <textarea value={element.note ?? ''} onChange={(e) => setNote(e.target.value)} rows={2} />
