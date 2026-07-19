@@ -11,6 +11,7 @@ import { canopyRadiusAtAge, interpolateCurve, isPlantAlive } from '../engine/gro
 import { generateHedgePlants } from '../engine/hedge';
 import { applyBrush, createTerrain, sampleHeight } from '../engine/terrain';
 import { useProjectStore } from '../store/useProjectStore';
+import { appConfirm } from '../utils/dialog';
 import type { HomesteadProject, Point, Terrain } from '../types';
 
 // 平面座標 (x, y) → 3D (x, 高程, y)
@@ -948,8 +949,8 @@ export default function Scene3D() {
               </button>
             ))}
             <button
-              onClick={() => {
-                if (confirm('🚜 整地:將全部地形恢復平整?(可 Ctrl+Z 復原)')) {
+              onClick={async () => {
+                if (await appConfirm('🚜 整地:將全部地形恢復平整?(可 Ctrl+Z 復原)')) {
                   useProjectStore.getState().commit((p) =>
                     p.terrain
                       ? {

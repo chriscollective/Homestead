@@ -6,6 +6,7 @@ import { PLANT_SPECIES, speciesById } from '../data/plants';
 import { polygonPerimeter } from '../engine/geometry';
 import { generateHedgePlants, hedgeEnclosureRatio } from '../engine/hedge';
 import { useProjectStore } from '../store/useProjectStore';
+import { appConfirm } from '../utils/dialog';
 
 const SHRUBS = PLANT_SPECIES.filter((s) => s.category === 'shrub' || s.category === 'bamboo');
 const TREES = PLANT_SPECIES.filter(
@@ -208,8 +209,8 @@ export function HedgePanel() {
 
       <button
         className="danger-btn"
-        onClick={() => {
-          if (confirm('移除整圈邊界綠籬?(可 Ctrl+Z 復原)')) {
+        onClick={async () => {
+          if (await appConfirm('移除整圈邊界綠籬?(可 Ctrl+Z 復原)')) {
             commit((p) => ({ ...p, hedge: null }));
           }
         }}
