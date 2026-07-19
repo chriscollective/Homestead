@@ -32,6 +32,7 @@ function makeProject(elements: HomesteadProject['elements']): HomesteadProject {
     name: 't',
     boundary: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }],
     terrain: null,
+    hedge: null,
     elements,
     settings: {
       northAngle: 0, gridVisible: true, gridSize: 5, showContours: false, showSlope: false,

@@ -3,6 +3,7 @@ import { AnalysisPanel } from './components/AnalysisPanel';
 import { BuildingPalette } from './components/BuildingPalette';
 import { CanvasView } from './components/CanvasView';
 import { Dashboard } from './components/Dashboard';
+import { HedgePanel } from './components/HedgePanel';
 import { LayersPanel } from './components/LayersPanel';
 import { SustainPanel } from './components/SustainPanel';
 import { PropertiesPanel } from './components/PropertiesPanel';
@@ -158,7 +159,8 @@ export default function App() {
           {viewMode === '2d' && !selectedId && tool === 'plant' && <SpeciesPalette />}
           {viewMode === '2d' && !selectedId && tool === 'building' && <BuildingPalette />}
           {viewMode === '2d' && tool === 'terrain' && <TerrainPanel />}
-          {viewMode === '2d' && !selectedId && tool !== 'plant' && tool !== 'building' && tool !== 'terrain' && (
+          {viewMode === '2d' && tool === 'hedge' && <HedgePanel />}
+          {viewMode === '2d' && !selectedId && tool !== 'plant' && tool !== 'building' && tool !== 'terrain' && tool !== 'hedge' && (
             <div className="panel tips">
               <h3>操作提示</h3>
               <ul>

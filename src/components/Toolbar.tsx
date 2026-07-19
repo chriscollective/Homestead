@@ -10,6 +10,7 @@ const TOOLS: { id: Tool; icon: string; label: string }[] = [
   { id: 'stream', icon: '🌊', label: '溪流' },
   { id: 'swale', icon: '〰', label: '集水溝' },
   { id: 'building', icon: '🏘', label: '放置建物' },
+  { id: 'hedge', icon: '🌿', label: '邊界綠籬' },
   { id: 'terrain', icon: '⛰', label: '地形' },
   { id: 'profile', icon: '📈', label: '剖面' },
   { id: 'home', icon: '🏠', label: '住家' },

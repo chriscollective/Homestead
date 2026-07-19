@@ -15,6 +15,7 @@ function makeProject(
       { x: 0, y: 200 },
     ],
     terrain: null,
+    hedge: null,
     elements,
     settings: {
       northAngle: 0,

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { BrushMode } from '../engine/terrain';
 import type {
   AreaType,
+  BoundaryHedgeConfig,
   HomesteadProject,
   PlacedElement,
   Point,
@@ -20,6 +21,7 @@ export type Tool =
   | 'stream'
   | 'swale'
   | 'building'
+  | 'hedge'
   | 'measure'
   | 'terrain'
   | 'profile'
@@ -32,6 +34,7 @@ interface Snapshot {
   boundary: Point[];
   elements: PlacedElement[];
   terrain: Terrain | null;
+  hedge: BoundaryHedgeConfig | null;
 }
 
 const STORAGE_KEY = 'homestead-planner:project';
@@ -83,6 +86,7 @@ export function createDefaultProject(): HomesteadProject {
     name: '我的家園',
     boundary: defaultBoundary(),
     terrain: null,
+    hedge: null,
     elements: [],
     settings: defaultSettings(),
   };
@@ -93,6 +97,7 @@ function normalizeProject(raw: HomesteadProject): HomesteadProject {
   return {
     ...raw,
     terrain: raw.terrain ?? null,
+    hedge: raw.hedge ?? null,
     settings: { ...defaultSettings(), ...raw.settings },
   };
 }
@@ -147,11 +152,18 @@ function snapshotOf(project: HomesteadProject): Snapshot {
     boundary: project.boundary,
     elements: project.elements,
     terrain: project.terrain,
+    hedge: project.hedge,
   };
 }
 
 function restoreSnapshot(project: HomesteadProject, s: Snapshot): HomesteadProject {
-  return { ...project, boundary: s.boundary, elements: s.elements, terrain: s.terrain };
+  return {
+    ...project,
+    boundary: s.boundary,
+    elements: s.elements,
+    terrain: s.terrain,
+    hedge: s.hedge,
+  };
 }
 
 interface ProjectState {
