@@ -1,2 +1,8 @@
 # macOS
 .DS_Store
+
+# dependencies & build
+node_modules/
+dist/
+*.local
+tsconfig.tsbuildinfo

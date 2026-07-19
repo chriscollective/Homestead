@@ -1,0 +1,564 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --earth-dark: #3d3425;
+  --earth: #6b4f2a;
+  --forest: #2d6a4f;
+  --paper: #f7f4ea;
+  --panel-bg: #fffdf6;
+  --border: #d8d2bd;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  color: var(--earth-dark);
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ── 頂列 ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.brand-mark {
+  font-size: 24px;
+}
+
+.brand h1 {
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+.brand small {
+  color: #8a7f68;
+  font-size: 11px;
+}
+
+.project-name {
+  flex: 0 1 260px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+}
+
+.topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.autosave-hint {
+  font-size: 11px;
+  color: #8a7f68;
+}
+
+.topbar-actions button {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--earth-dark);
+}
+
+.topbar-actions button:hover {
+  background: var(--paper);
+  border-color: var(--earth);
+}
+
+/* ── 工作區 ── */
+.workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── 工具列 ── */
+.toolbar {
+  width: 76px;
+  background: var(--panel-bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 8px 6px;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.tool-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 2px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+  color: var(--earth-dark);
+}
+
+.tool-btn:hover {
+  background: var(--paper);
+}
+
+.tool-btn.active {
+  background: #e5efe6;
+  border-color: var(--forest);
+  color: var(--forest);
+}
+
+.tool-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.tool-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.tool-label {
+  font-size: 10px;
+}
+
+.tool-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 4px 6px;
+}
+
+.tool-sub-btn {
+  padding: 4px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  color: var(--earth-dark);
+}
+
+.tool-sub-btn.active {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: #fff;
+}
+
+.toolbar-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 4px;
+}
+
+/* ── 畫布 ── */
+.canvas-container {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: #eae6d8;
+}
+
+.canvas-svg {
+  display: block;
+  touch-action: none;
+  user-select: none;
+}
+
+.north-arrow {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(255, 253, 246, 0.9);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--earth);
+  pointer-events: none;
+}
+
+.north-arrow div {
+  font-size: 16px;
+  color: #b3261e;
+}
+
+.scale-bar {
+  position: absolute;
+  bottom: 44px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--earth);
+  pointer-events: none;
+}
+
+.scale-bar-line {
+  height: 4px;
+  border: 1px solid var(--earth);
+  border-top: none;
+  background: transparent;
+}
+
+.status-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 12px;
+  background: rgba(255, 253, 246, 0.92);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: #6f6552;
+}
+
+.status-hint {
+  color: #6f6552;
+}
+
+.status-coords {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: #8a7f68;
+}
+
+.status-fit {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 5px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--earth-dark);
+}
+
+/* ── 側欄 ── */
+.sidebar {
+  width: 300px;
+  background: var(--panel-bg);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.panel {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.panel h3 {
+  font-size: 13px;
+  margin-bottom: 10px;
+  color: var(--forest);
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.stat-row span {
+  color: #8a7f68;
+}
+
+.stat-row strong small {
+  display: block;
+  font-weight: normal;
+  color: #8a7f68;
+  font-size: 11px;
+  text-align: right;
+}
+
+.forest-meter {
+  margin: 10px 0;
+}
+
+.forest-meter-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.forest-meter-head strong.ok {
+  color: var(--forest);
+}
+
+.forest-meter-head strong.mid {
+  color: #b07d1e;
+}
+
+.forest-meter-head strong.low {
+  color: #b3261e;
+}
+
+.forest-meter-bar {
+  position: relative;
+  height: 12px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.forest-meter-fill {
+  height: 100%;
+  transition: width 0.2s;
+}
+
+.forest-meter-fill.ok {
+  background: var(--forest);
+}
+
+.forest-meter-fill.mid {
+  background: #d9a441;
+}
+
+.forest-meter-fill.low {
+  background: #cf6f4f;
+}
+
+.forest-meter-target {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--earth-dark);
+}
+
+.forest-meter small {
+  display: block;
+  margin-top: 4px;
+  color: #8a7f68;
+  font-size: 11px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.stat-grid div {
+  text-align: center;
+  background: var(--paper);
+  border-radius: 8px;
+  padding: 6px 2px;
+}
+
+.stat-grid strong {
+  display: block;
+  font-size: 16px;
+  color: var(--earth-dark);
+}
+
+.stat-grid span {
+  font-size: 11px;
+  color: #8a7f68;
+}
+
+.advice,
+.warning {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.advice {
+  background: #eef4ee;
+  color: #3c5c46;
+}
+
+.warning {
+  background: #fbecec;
+  color: #a12622;
+}
+
+/* ── 物種面板 ── */
+.species-filter {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.species-group h4 {
+  font-size: 12px;
+  color: #8a7f68;
+  margin: 8px 0 4px;
+}
+
+.species-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  cursor: pointer;
+  color: var(--earth-dark);
+}
+
+.species-item:hover {
+  background: var(--paper);
+}
+
+.species-item.active {
+  background: #e5efe6;
+  border-color: var(--forest);
+}
+
+.species-name {
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.native-badge {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: normal;
+  color: var(--forest);
+  border: 1px solid var(--forest);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.species-meta {
+  display: block;
+  font-size: 11px;
+  color: #8a7f68;
+}
+
+.species-note {
+  display: block;
+  margin-top: 8px;
+  color: #a89e85;
+  font-size: 11px;
+}
+
+/* ── 屬性面板 ── */
+.field {
+  display: block;
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.field span {
+  display: block;
+  color: #8a7f68;
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+
+.field select,
+.field input,
+.field textarea {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  color: var(--earth-dark);
+}
+
+.species-detail {
+  font-size: 12px;
+  color: #6f6552;
+  background: var(--paper);
+  border-radius: 8px;
+  padding: 8px;
+  margin: 6px 0;
+  line-height: 1.6;
+}
+
+.species-detail em {
+  color: #8a7f68;
+}
+
+.danger-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 7px;
+  border: 1px solid #d8b1ad;
+  border-radius: 7px;
+  background: #fbecec;
+  color: #a12622;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.danger-btn:hover {
+  background: #f5d9d7;
+}
+
+.properties small,
+.tips li {
+  color: #8a7f68;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.tips ul {
+  padding-left: 18px;
+}
