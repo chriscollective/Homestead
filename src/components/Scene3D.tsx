@@ -1,5 +1,5 @@
 // M6 3D 檢視 — 與 2D 共用同一份 HomesteadProject 資料模型(單一資料源原則)
-import { Line, OrbitControls, PointerLockControls, Sky } from '@react-three/drei';
+import { Line, OrbitControls, Sky } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
@@ -280,21 +280,26 @@ function ResetCamera({
   return null;
 }
 
-/** 第一人稱漫遊:WASD 移動、視線高 1.7m 貼地 */
-function WalkControls({ terrain, start }: { terrain: Terrain | null; start: Point }) {
-  const { camera } = useThree();
+/**
+ * 第三人稱漫遊:鍵盤操作人偶在地形上行走,相機跟隨其視角。
+ * 滑鼠「拖曳」環視(不用 Pointer Lock,內嵌網頁也能用)。
+ * ↑↓/W/S 前進後退、←→/A/D 轉向。
+ */
+function ThirdPersonWalk({ terrain, start }: { terrain: Terrain | null; start: Point }) {
+  const { camera, gl } = useThree();
+  const pos = useRef<Point>({ x: start.x, y: start.y + 8 }); // 從住家南側 8m 出發,面向住家
+  const yaw = useRef(Math.PI); // 初始面向北(-z)
+  const pitch = useRef(0.35); // 視角俯仰(0.05 貼地平視 ~ 1.1 俯瞰)
   const keys = useRef<Record<string, boolean>>({});
-
-  // 進入漫遊時從住家/中心出發(而非環繞相機的遠處)
-  useEffect(() => {
-    const ground = elevation(terrain, start);
-    camera.position.set(start.x, ground + 1.7, start.y + 6);
-    camera.lookAt(start.x, ground + 1.6, start.y - 10);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const avatar = useRef<THREE.Group>(null);
 
   useEffect(() => {
-    const down = (e: KeyboardEvent) => (keys.current[e.code] = true);
+    const down = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') return;
+      keys.current[e.code] = true;
+      if (e.code.startsWith('Arrow')) e.preventDefault(); // 避免頁面捲動
+    };
     const up = (e: KeyboardEvent) => (keys.current[e.code] = false);
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
@@ -304,27 +309,80 @@ function WalkControls({ terrain, start }: { terrain: Terrain | null; start: Poin
     };
   }, []);
 
+  // 滑鼠拖曳環視
+  useEffect(() => {
+    const el = gl.domElement;
+    let last: { x: number; y: number } | null = null;
+    const downH = (e: PointerEvent) => {
+      last = { x: e.clientX, y: e.clientY };
+    };
+    const moveH = (e: PointerEvent) => {
+      if (!last || e.buttons === 0) {
+        last = null;
+        return;
+      }
+      yaw.current -= (e.clientX - last.x) * 0.005;
+      pitch.current = Math.min(
+        Math.max(pitch.current + (e.clientY - last.y) * 0.004, 0.05),
+        1.1
+      );
+      last = { x: e.clientX, y: e.clientY };
+    };
+    const upH = () => {
+      last = null;
+    };
+    el.addEventListener('pointerdown', downH);
+    window.addEventListener('pointermove', moveH);
+    window.addEventListener('pointerup', upH);
+    return () => {
+      el.removeEventListener('pointerdown', downH);
+      window.removeEventListener('pointermove', moveH);
+      window.removeEventListener('pointerup', upH);
+    };
+  }, [gl]);
+
   useFrame((_, delta) => {
-    const speed = 8; // m/s
-    const dir = new THREE.Vector3();
-    camera.getWorldDirection(dir);
-    dir.y = 0;
-    dir.normalize();
-    const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0));
-    const move = new THREE.Vector3();
-    if (keys.current.KeyW) move.add(dir);
-    if (keys.current.KeyS) move.sub(dir);
-    if (keys.current.KeyD) move.add(right);
-    if (keys.current.KeyA) move.sub(right);
-    if (move.lengthSq() > 0) {
-      move.normalize().multiplyScalar(speed * delta);
-      camera.position.add(move);
+    const k = keys.current;
+    const turn = 2.2; // rad/s
+    if (k.KeyA || k.ArrowLeft) yaw.current += turn * delta;
+    if (k.KeyD || k.ArrowRight) yaw.current -= turn * delta;
+    const fwd = { x: Math.sin(yaw.current), y: Math.cos(yaw.current) };
+    let move = 0;
+    if (k.KeyW || k.ArrowUp) move += 1;
+    if (k.KeyS || k.ArrowDown) move -= 1;
+    const speed = 6; // m/s(步行略快)
+    pos.current = {
+      x: pos.current.x + fwd.x * move * speed * delta,
+      y: pos.current.y + fwd.y * move * speed * delta,
+    };
+    const groundY = elevation(terrain, pos.current);
+    if (avatar.current) {
+      avatar.current.position.set(pos.current.x, groundY, pos.current.y);
+      avatar.current.rotation.y = yaw.current;
     }
-    const ground = elevation(terrain, { x: camera.position.x, y: camera.position.z });
-    camera.position.y = ground + 1.7;
+    // 相機跟在人偶後上方,順著人偶的朝向看
+    const dist = 7 + pitch.current * 8;
+    const target = new THREE.Vector3(
+      pos.current.x - fwd.x * dist,
+      groundY + 1.2 + pitch.current * 11,
+      pos.current.y - fwd.y * dist
+    );
+    camera.position.lerp(target, 0.28);
+    camera.lookAt(pos.current.x, groundY + 1.6, pos.current.y);
   });
 
-  return <PointerLockControls />;
+  return (
+    <group ref={avatar}>
+      <mesh position={[0, 0.7, 0]} castShadow>
+        <cylinderGeometry args={[0.16, 0.2, 1.4, 8]} />
+        <meshStandardMaterial color="#2d6a4f" flatShading />
+      </mesh>
+      <mesh position={[0, 1.55, 0]} castShadow>
+        <sphereGeometry args={[0.15, 8, 6]} />
+        <meshStandardMaterial color="#d9b38c" flatShading />
+      </mesh>
+    </group>
+  );
 }
 
 export default function Scene3D() {
@@ -525,7 +583,7 @@ export default function Scene3D() {
         />
 
         {walkMode ? (
-          <WalkControls
+          <ThirdPersonWalk
             terrain={project.terrain}
             start={project.settings.homePosition ?? center}
           />
@@ -592,7 +650,7 @@ export default function Scene3D() {
         )}
         <span className="scene3d-hint">
           {walkMode
-            ? '點擊畫面鎖定視角,WASD 移動、滑鼠轉向,Esc 解鎖'
+            ? '↑↓(W/S)前進後退、←→(A/D)轉向;滑鼠拖曳環視'
             : sculptMode
               ? '在地面左鍵拖曳塑形(即時看到起伏);Ctrl+Z 復原'
               : '拖曳環繞、滾輪縮放、右鍵平移'}
