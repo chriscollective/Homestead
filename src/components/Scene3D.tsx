@@ -1,4 +1,5 @@
 // M6 3D 檢視 — 與 2D 共用同一份 HomesteadProject 資料模型(單一資料源原則)
+import { Tree as EzTreeGen } from '@dgreenheck/ez-tree';
 import { Line, OrbitControls, Sky } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -448,6 +449,86 @@ function PlantModel({
   );
 }
 
+// ── EZ-Tree 精緻樹(MIT,程序化生成;依樹形×大小×種子快取,實例共享幾何體)──
+const EZ_PRESET_BY_CROWN: Record<string, 'Oak' | 'Ash' | 'Aspen' | 'Pine' | null> = {
+  round: 'Oak',
+  spreading: 'Oak',
+  columnar: 'Aspen',
+  umbrella: 'Ash',
+  open: 'Ash',
+  conical: 'Pine',
+  // 特殊形維持客製低模(EZ-Tree 做不出棕櫚/芭蕉/竹叢/灌木)
+  palm: null,
+  banana: null,
+  bamboo: null,
+  shrub: null,
+};
+
+const ezCache = new Map<string, { obj: THREE.Object3D; height: number } | null>();
+
+function getEzTreeBase(preset: string, seedIdx: number) {
+  const key = `${preset}:${seedIdx}`;
+  if (!ezCache.has(key)) {
+    try {
+      const t = new EzTreeGen();
+      t.loadPreset(preset);
+      t.options.seed = 1000 + seedIdx * 137;
+      t.generate();
+      const bbox = new THREE.Box3().setFromObject(t);
+      ezCache.set(key, { obj: t, height: Math.max(bbox.max.y, 0.1) });
+    } catch {
+      ezCache.set(key, null); // 生成失敗 → 呼叫端回退低模
+    }
+  }
+  return ezCache.get(key) ?? null;
+}
+
+/** 精緻樹:EZ-Tree 生成 + 縮放到實際樹高;不支援的樹形回退 PlantModel */
+function DetailedTree({
+  position,
+  speciesId,
+  category,
+  height,
+  canopyRadius,
+  terrain,
+}: {
+  position: Point;
+  speciesId: string;
+  category: 'tree_fruit' | 'tree_forest' | 'shrub' | 'bamboo';
+  height: number;
+  canopyRadius: number;
+  terrain: Terrain | null;
+}) {
+  const form = plantForm(speciesId, category);
+  const presetBase = EZ_PRESET_BY_CROWN[form.crown];
+  const j = seededJitter(position.x, position.y);
+  const cloned = useMemo(() => {
+    if (!presetBase || height < 1) return null;
+    const size = height < 6 ? 'Small' : height < 12 ? 'Medium' : 'Large';
+    const base = getEzTreeBase(`${presetBase} ${size}`, Math.floor(j * 3));
+    if (!base) return null;
+    const c = base.obj.clone(); // clone 共享幾何體與材質,額外成本極低
+    c.scale.setScalar(Math.max(height, 0.5) / base.height);
+    c.rotation.y = j * Math.PI * 2;
+    return c;
+  }, [presetBase, height, j]);
+
+  if (!cloned) {
+    return (
+      <PlantModel
+        position={position}
+        speciesId={speciesId}
+        category={category}
+        height={height}
+        canopyRadius={canopyRadius}
+        terrain={terrain}
+      />
+    );
+  }
+  const groundY = elevation(terrain, position);
+  return <primitive object={cloned} position={[position.x, groundY, position.y]} />;
+}
+
 /** 住家(簡易小屋) */
 function HomeMarker({ position, terrain }: { position: Point; terrain: Terrain | null }) {
   const y = elevation(terrain, position);
@@ -611,6 +692,8 @@ export default function Scene3D() {
   const viewYear = useProjectStore((s) => s.viewYear);
   const [walkMode, setWalkMode] = useState(false);
   const [sculptMode, setSculptMode] = useState(false);
+  const [detailedTrees, setDetailedTrees] = useState(false);
+  const TreeComp = detailedTrees ? DetailedTree : PlantModel;
   const controlsRef = useRef<{ enabled: boolean } | null>(null);
   const brush = useProjectStore((s) => s.brush);
   const setBrush = useProjectStore((s) => s.setBrush);
@@ -744,7 +827,7 @@ export default function Scene3D() {
           if (!species || !isPlantAlive(el.plantedYear, el.removedYear, viewYear)) return null;
           const age = viewYear - el.plantedYear;
           return (
-            <PlantModel
+            <TreeComp
               key={el.id}
               position={el.position}
               speciesId={el.speciesId}
@@ -771,7 +854,7 @@ export default function Scene3D() {
             const r = Math.max(canopyRadiusAtAge(species.growth.canopyCurve, age), 0.2);
             if (hp.isTree) {
               return (
-                <PlantModel
+                <TreeComp
                   key={`hg${i}`}
                   position={hp.position}
                   speciesId={hp.speciesId}
@@ -846,6 +929,13 @@ export default function Scene3D() {
             ⛰ 塑形
           </button>
         )}
+        <button
+          className={detailedTrees ? 'active' : ''}
+          onClick={() => setDetailedTrees((v) => !v)}
+          title="喬木改用 EZ-Tree 程序化精緻模型(樹多時較耗效能)"
+        >
+          🌲 精緻樹
+        </button>
         {!walkMode && sculptMode && (
           <>
             {(['raise', 'lower', 'smooth'] as const).map((m) => (
