@@ -3,8 +3,10 @@ import { useMemo } from 'react';
 import { speciesById } from '../data/plants';
 import {
   KWH_PER_PERSON_YEAR,
+  microHydroKwh,
   shadeFactorAt,
   solarRoofKwh,
+  streamHead,
   WIND_CLASS_LABELS,
   windTurbineKwh,
   type WindClass,
@@ -38,14 +40,18 @@ function EnergySection() {
 
   const energy = useMemo(() => {
     let solar = 0;
+    let hydro = 0;
     for (const el of project.elements) {
       if (el.kind === 'building' && (el.solarRoofM2 ?? 0) > 0) {
         solar += solarRoofKwh(el.solarRoofM2!, shadeFactorAt(project, speciesById, viewYear, el));
       }
+      if (el.kind === 'stream' && (el.flowLps ?? 0) > 0 && project.terrain) {
+        hydro += microHydroKwh(el.flowLps!, streamHead(project.terrain, el.line));
+      }
     }
     const wind = windTurbineKwh(windTurbineKw, windClass);
     const need = people * KWH_PER_PERSON_YEAR;
-    return { solar, wind, need, ratio: need > 0 ? (solar + wind) / need : 0 };
+    return { solar, wind, hydro, need, ratio: need > 0 ? (solar + wind + hydro) / need : 0 };
   }, [project, viewYear, windTurbineKw, windClass, people]);
 
   return (
@@ -53,9 +59,11 @@ function EnergySection() {
       <RatioBar
         label="⚡ 能源"
         ratio={energy.ratio}
-        detail={`太陽能 ${Math.round(energy.solar)} + 風力 ${Math.round(
-          energy.wind
-        )} 度/年 vs 需求約 ${energy.need} 度(在建物屬性設光電板;冬季東北季風與夏季日照互補)`}
+        detail={`太陽能 ${Math.round(energy.solar)} + 微水力 ${Math.round(
+          energy.hydro
+        )} + 風力 ${Math.round(energy.wind)} 度/年 vs 需求約 ${
+          energy.need
+        } 度(夏日照/雨季水力/冬季風互補;光電設於建物屬性、微水力設於溪流屬性)`}
       />
       <label className="field">
         <span>小型風機(kW,0 = 無)</span>

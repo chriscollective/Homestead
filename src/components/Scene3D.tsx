@@ -161,10 +161,54 @@ function HomeMarker({ position, terrain }: { position: Point; terrain: Terrain |
   );
 }
 
+/** 1.7m 人形比例參照:讓使用者直觀感受真實尺度 */
+function HumanFigure({ position, terrain }: { position: Point; terrain: Terrain | null }) {
+  const y = elevation(terrain, position);
+  return (
+    <group position={[position.x, y, position.y]}>
+      <mesh position={[0, 0.7, 0]} castShadow>
+        <cylinderGeometry args={[0.16, 0.2, 1.4, 8]} />
+        <meshStandardMaterial color="#5b7db1" flatShading />
+      </mesh>
+      <mesh position={[0, 1.55, 0]} castShadow>
+        <sphereGeometry args={[0.15, 8, 6]} />
+        <meshStandardMaterial color="#d9b38c" flatShading />
+      </mesh>
+    </group>
+  );
+}
+
+/** 依觸發重置相機至全覽視角(距離依地界大小自動計算) */
+function ResetCamera({
+  trigger,
+  center,
+  extent,
+}: {
+  trigger: number;
+  center: Point;
+  extent: number;
+}) {
+  const { camera } = useThree();
+  useEffect(() => {
+    camera.position.set(center.x, extent * 0.6, center.y + extent * 0.9);
+    camera.lookAt(center.x, 0, center.y);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trigger]);
+  return null;
+}
+
 /** 第一人稱漫遊:WASD 移動、視線高 1.7m 貼地 */
-function WalkControls({ terrain }: { terrain: Terrain | null }) {
+function WalkControls({ terrain, start }: { terrain: Terrain | null; start: Point }) {
   const { camera } = useThree();
   const keys = useRef<Record<string, boolean>>({});
+
+  // 進入漫遊時從住家/中心出發(而非環繞相機的遠處)
+  useEffect(() => {
+    const ground = elevation(terrain, start);
+    camera.position.set(start.x, ground + 1.7, start.y + 6);
+    camera.lookAt(start.x, ground + 1.6, start.y - 10);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => (keys.current[e.code] = true);
@@ -205,11 +249,16 @@ export default function Scene3D() {
   const viewYear = useProjectStore((s) => s.viewYear);
   const [walkMode, setWalkMode] = useState(false);
 
-  const center = useMemo(() => {
-    if (project.boundary.length < 3) return { x: 50, y: 50 };
+  const { center, extent } = useMemo(() => {
+    if (project.boundary.length < 3) return { center: { x: 50, y: 50 }, extent: 120 };
     const box = boundingBox(project.boundary);
-    return { x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 };
+    return {
+      center: { x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 },
+      // 取景距離依地界實際大小:1 公頃(~120m 對角)會拉遠到能全覽
+      extent: Math.max(box.maxX - box.minX, box.maxY - box.minY, 40),
+    };
   }, [project.boundary]);
+  const [resetKey, setResetKey] = useState(0);
 
   const boundaryLine = useMemo(() => {
     if (project.boundary.length < 3) return null;
@@ -225,9 +274,17 @@ export default function Scene3D() {
       <Canvas
         shadows
         gl={{ preserveDrawingBuffer: true }}
-        camera={{ position: [center.x, 70, center.y + 90], fov: 50 }}
+        camera={{
+          position: [center.x, extent * 0.6, center.y + extent * 0.9],
+          fov: 50,
+          near: 0.3,
+          far: extent * 20,
+        }}
       >
         <Sky sunPosition={[100, 80, 20]} />
+        {/* 遠景霧氣:距離感/尺度感提示 */}
+        <fog attach="fog" args={['#dfe6dc', extent * 2, extent * 8]} />
+        {!walkMode && <ResetCamera trigger={resetKey} center={center} extent={extent} />}
         <ambientLight intensity={0.55} />
         <directionalLight
           position={[120, 150, 60]}
@@ -273,6 +330,24 @@ export default function Scene3D() {
               />
             );
           }
+          if (el.kind === 'stream' || el.kind === 'swale') {
+            const pts = el.line.map(
+              (p) =>
+                [p.x, elevation(project.terrain, p) + 0.15, p.y] as [number, number, number]
+            );
+            if (pts.length < 2) return null;
+            return (
+              <Line
+                key={el.id}
+                points={pts}
+                color={el.kind === 'stream' ? '#2b6c96' : '#0e7490'}
+                lineWidth={el.kind === 'stream' ? 4 : 2.5}
+                dashed={el.kind === 'swale'}
+                dashSize={2}
+                gapSize={1.2}
+              />
+            );
+          }
           if (el.kind === 'building') {
             const y = elevation(project.terrain, el.position);
             return (
@@ -314,10 +389,29 @@ export default function Scene3D() {
           <HomeMarker position={project.settings.homePosition} terrain={project.terrain} />
         )}
 
+        {/* 比例參照:住家旁的 1.7m 人形 */}
+        <HumanFigure
+          position={
+            project.settings.homePosition
+              ? { x: project.settings.homePosition.x + 5, y: project.settings.homePosition.y + 4 }
+              : { x: center.x + 5, y: center.y }
+          }
+          terrain={project.terrain}
+        />
+
         {walkMode ? (
-          <WalkControls terrain={project.terrain} />
+          <WalkControls
+            terrain={project.terrain}
+            start={project.settings.homePosition ?? center}
+          />
         ) : (
-          <OrbitControls target={[center.x, 0, center.y]} maxPolarAngle={Math.PI / 2 - 0.02} />
+          <OrbitControls
+            key={resetKey}
+            target={[center.x, 0, center.y]}
+            maxPolarAngle={Math.PI / 2 - 0.02}
+            minDistance={3}
+            maxDistance={extent * 5}
+          />
         )}
       </Canvas>
 
@@ -331,6 +425,11 @@ export default function Scene3D() {
         <button className={walkMode ? 'active' : ''} onClick={() => setWalkMode(true)}>
           🚶 漫遊
         </button>
+        {!walkMode && (
+          <button onClick={() => setResetKey((k) => k + 1)} title="重置為全覽視角">
+            ⌖ 全覽
+          </button>
+        )}
         <span className="scene3d-hint">
           {walkMode
             ? '點擊畫面鎖定視角,WASD 移動、滑鼠轉向,Esc 解鎖'

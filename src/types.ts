@@ -87,6 +87,15 @@ export interface AreaElement {
   note?: string;
 }
 
+/** 溪流(線元素,M2/M12 微水力)*/
+export interface StreamElement {
+  id: string;
+  kind: 'stream';
+  line: Point[];
+  flowLps?: number; // 常流量估計(L/s,M12 微水力)
+  note?: string;
+}
+
 /** 等高集水溝(swale,M13)*/
 export interface SwaleElement {
   id: string;
@@ -116,7 +125,13 @@ export interface BuildingElement {
   note?: string;
 }
 
-export type PlacedElement = PlantElement | AreaElement | WaterElement | BuildingElement | SwaleElement;
+export type PlacedElement =
+  | PlantElement
+  | AreaElement
+  | WaterElement
+  | BuildingElement
+  | SwaleElement
+  | StreamElement;
 
 // ── 地勢(M5)──
 

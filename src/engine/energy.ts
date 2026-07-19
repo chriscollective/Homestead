@@ -82,3 +82,36 @@ export function futureShadeYear(
 export function windTurbineKwh(ratedKw: number, windClass: WindClass): number {
   return ratedKw * WIND_FULL_LOAD_HOURS[windClass];
 }
+
+// ── 微水力(M12)──
+
+import type { Point, Terrain } from '../types';
+import { sampleHeight } from './terrain';
+
+/** 溪流沿線落差 head(m):線上最高與最低高程差(依 M5 地勢自動計算) */
+export function streamHead(terrain: Terrain, line: Point[]): number {
+  if (line.length < 2) return 0;
+  let min = Infinity;
+  let max = -Infinity;
+  for (const p of line) {
+    const h = sampleHeight(terrain, p);
+    if (h < min) min = h;
+    if (h > max) max = h;
+  }
+  return Math.max(max - min, 0);
+}
+
+/**
+ * 微水力年發電量(kWh/年)。
+ * P = ρ × g × Q × H × η(規格書簡化公式,η 預設 0.6)
+ * @param dryFactor 枯水期流量折減(預設 0.7)
+ */
+export function microHydroKwh(
+  flowLps: number,
+  headM: number,
+  efficiency = 0.6,
+  dryFactor = 0.7
+): number {
+  const powerW = 9.81 * flowLps * headM * efficiency; // ρg(Q/1000)H×1000 = 9.81·Q(L/s)·H
+  return (powerW * 8760 * dryFactor) / 1000;
+}

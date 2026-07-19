@@ -7,6 +7,7 @@ const TOOLS: { id: Tool; icon: string; label: string }[] = [
   { id: 'plant', icon: '🌳', label: '放置植栽' },
   { id: 'area', icon: '▦', label: '繪製區塊' },
   { id: 'pond', icon: '💧', label: '繪製池塘' },
+  { id: 'stream', icon: '🌊', label: '溪流' },
   { id: 'swale', icon: '〰', label: '集水溝' },
   { id: 'building', icon: '🏘', label: '放置建物' },
   { id: 'terrain', icon: '⛰', label: '地形' },
