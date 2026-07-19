@@ -19,6 +19,8 @@ import {
   sampleProfile,
   slopeGrid,
 } from '../engine/terrain';
+import { generateHedgePlants, nearestPerimeterT, pointAtPerimeter } from '../engine/hedge';
+import { polygonPerimeter } from '../engine/geometry';
 import { ZONE_RADII } from '../engine/zones';
 import { newId, useProjectStore } from '../store/useProjectStore';
 import type { AreaType, HomesteadProject, PlacedElement, Point } from '../types';
@@ -332,6 +334,18 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
       (e.currentTarget as Element).setPointerCapture(e.pointerId);
     } else if (tool === 'profile') {
       setProfilePts((pts) => (pts.length >= 2 ? [p] : [...pts, p]));
+    } else if (tool === 'hedge') {
+      if (project.hedge && project.boundary.length >= 3) {
+        const near = nearestPerimeterT(project.boundary, p);
+        if (near.dist < 25 / view.scale + 3) {
+          commit((proj) => ({
+            ...proj,
+            hedge: proj.hedge
+              ? { ...proj.hedge, gaps: [...proj.hedge.gaps, { t: near.t, width: 4 }] }
+              : proj.hedge,
+          }));
+        }
+      }
     } else if (tool === 'home') {
       updateSettings({ homePosition: p, showZones: true });
       setTool('select');
@@ -426,6 +440,14 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
       dragRef.current = { type: 'poly', id: el.id, last: p };
     }
     svgRef.current?.setPointerCapture(e.pointerId);
+  };
+
+  /** 右鍵直接刪除元素(可 Ctrl+Z 復原);任何工具下皆可 */
+  const onElementContextMenu = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    commit((p) => ({ ...p, elements: p.elements.filter((el) => el.id !== id) }));
+    if (useProjectStore.getState().selectedId === id) select(null);
   };
 
   const onVertexPointerDown = (
@@ -525,6 +547,12 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
     return m;
   }, [project.elements]);
 
+  // 邊界綠籬植株(純衍生,隨地界/設定/年份自動重算)
+  const hedgePlants = useMemo(() => {
+    if (!project.hedge || project.boundary.length < 3) return [];
+    return generateHedgePlants(project.boundary, project.hedge);
+  }, [project.hedge, project.boundary]);
+
   // 網格線(依可視範圍計算,過密時自動放大間距)
   const gridLines = useMemo(() => {
     if (!project.settings.gridVisible) return null;
@@ -605,6 +633,9 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
     stream: '沿溪流路徑逐點繪製(上游→下游);雙擊完成;屬性面板估微水力發電',
     building: `點擊放置「${buildingModelById.get(selectedBuildingId)?.label ?? ''}」(黑粗邊 = 正面/門)`,
     measure: '逐點點擊測距;Esc 清除',
+    hedge: project.hedge
+      ? '點擊地界線可新增出入口;右側面板調整灌木/喬木/株距'
+      : '在右側面板按「建立邊界綠籬」,沿地界自動佈滿灌木',
     terrain: `地形筆刷:${{ raise: '抬升', lower: '下降', smooth: '平滑' }[brush.mode]}(拖曳塗抹;右側面板調整)`,
     profile: project.terrain ? '點擊兩點顯示地形剖面;Esc 清除' : '尚無地形 — 請先用地形筆刷塑形',
     home: '點擊放置住家位置(分區分析中心)',
@@ -725,6 +756,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                     vectorEffect="non-scaling-stroke"
                     pointerEvents={tool === 'select' ? 'auto' : 'none'}
                     onPointerDown={(e) => onElementPointerDown(e, el)}
+                    onContextMenu={(e) => onElementContextMenu(e, el.id)}
                     style={{ cursor: tool === 'select' ? 'move' : undefined }}
                   />
                   {view.scale > 1.5 && (
@@ -753,6 +785,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                     vectorEffect="non-scaling-stroke"
                     pointerEvents={tool === 'select' ? 'auto' : 'none'}
                     onPointerDown={(e) => onElementPointerDown(e, el)}
+                    onContextMenu={(e) => onElementContextMenu(e, el.id)}
                     style={{ cursor: tool === 'select' ? 'move' : undefined }}
                   />
                   {view.scale > 1.5 && (
@@ -789,6 +822,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                 vectorEffect="non-scaling-stroke"
                 pointerEvents={tool === 'select' ? 'stroke' : 'none'}
                 onPointerDown={(e) => onElementPointerDown(e, el)}
+                onContextMenu={(e) => onElementContextMenu(e, el.id)}
                 style={{ cursor: tool === 'select' ? 'move' : undefined }}
               />
             );
@@ -809,6 +843,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                 vectorEffect="non-scaling-stroke"
                 pointerEvents={tool === 'select' ? 'stroke' : 'none'}
                 onPointerDown={(e) => onElementPointerDown(e, el)}
+                onContextMenu={(e) => onElementContextMenu(e, el.id)}
                 style={{ cursor: tool === 'select' ? 'move' : undefined }}
               />
             );
@@ -825,6 +860,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                 transform={`translate(${el.position.x},${el.position.y}) rotate(${el.rotationDeg})`}
                 pointerEvents={tool === 'select' ? 'auto' : 'none'}
                 onPointerDown={(e) => onElementPointerDown(e, el)}
+                onContextMenu={(e) => onElementContextMenu(e, el.id)}
                 style={{ cursor: tool === 'select' ? 'move' : undefined }}
               >
                 <rect
@@ -863,6 +899,79 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
             );
           })}
 
+          {/* 邊界綠籬(衍生植株,以設定面板編輯) */}
+          {project.hedge && viewYear >= project.hedge.plantedYear && (
+            <g pointerEvents="none">
+              {hedgePlants.map((hp, i) => {
+                const species = speciesById.get(hp.speciesId);
+                if (!species) return null;
+                const r = canopyRadiusAtAge(
+                  species.growth.canopyCurve,
+                  viewYear - project.hedge!.plantedYear
+                );
+                const style = CANOPY_STYLES[species.category] ?? CANOPY_STYLES.shrub;
+                return (
+                  <circle
+                    key={i}
+                    cx={hp.position.x}
+                    cy={hp.position.y}
+                    r={Math.max(r, 0.25)}
+                    fill={style.fill}
+                    stroke={hp.isTree ? style.stroke : 'none'}
+                    strokeWidth={hp.isTree ? 1 : 0}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                );
+              })}
+            </g>
+          )}
+
+          {/* 綠籬出入口標記(綠籬工具下可點擊刪除) */}
+          {project.hedge &&
+            project.hedge.gaps.map((g, i) => {
+              const total = polygonPerimeter(project.boundary);
+              const a = pointAtPerimeter(project.boundary, g.t * total - g.width / 2).point;
+              const b = pointAtPerimeter(project.boundary, g.t * total + g.width / 2).point;
+              return (
+                <g key={`gap${i}`}>
+                  <line
+                    x1={a.x}
+                    y1={a.y}
+                    x2={b.x}
+                    y2={b.y}
+                    stroke="#e07a1f"
+                    strokeWidth={5}
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                    pointerEvents={tool === 'hedge' ? 'stroke' : 'none'}
+                    style={{ cursor: tool === 'hedge' ? 'pointer' : undefined }}
+                    onPointerDown={(e) => {
+                      if (tool !== 'hedge') return;
+                      e.stopPropagation();
+                      commit((proj) => ({
+                        ...proj,
+                        hedge: proj.hedge
+                          ? { ...proj.hedge, gaps: proj.hedge.gaps.filter((_, j) => j !== i) }
+                          : proj.hedge,
+                      }));
+                    }}
+                  />
+                  {view.scale > 1.2 && (
+                    <text
+                      x={(a.x + b.x) / 2}
+                      y={(a.y + b.y) / 2 - 6 / view.scale}
+                      fontSize={11 / view.scale}
+                      fill="#e07a1f"
+                      textAnchor="middle"
+                      pointerEvents="none"
+                    >
+                      出入口 {g.width}m
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+
           {/* 植栽(依時間軸年份呈現當年冠幅,M4) */}
           {project.elements.map((el) => {
             if (el.kind !== 'plant') return null;
@@ -881,6 +990,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                 key={el.id}
                 pointerEvents={tool === 'select' ? 'auto' : 'none'}
                 onPointerDown={(e) => onElementPointerDown(e, el)}
+                onContextMenu={(e) => onElementContextMenu(e, el.id)}
                 style={{ cursor: tool === 'select' ? 'move' : undefined }}
                 opacity={alive ? 1 : 0.3}
               >

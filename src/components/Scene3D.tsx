@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { speciesById } from '../data/plants';
 import { boundingBox } from '../engine/geometry';
 import { canopyRadiusAtAge, interpolateCurve, isPlantAlive } from '../engine/growth';
+import { generateHedgePlants } from '../engine/hedge';
 import { sampleHeight } from '../engine/terrain';
 import { useProjectStore } from '../store/useProjectStore';
 import type { HomesteadProject, Point, Terrain } from '../types';
@@ -388,6 +389,40 @@ export default function Scene3D() {
         {project.settings.homePosition && (
           <HomeMarker position={project.settings.homePosition} terrain={project.terrain} />
         )}
+
+        {/* 邊界綠籬(灌木用單一球體省繪製呼叫;間植喬木用完整樹模) */}
+        {project.hedge &&
+          viewYear >= project.hedge.plantedYear &&
+          generateHedgePlants(project.boundary, project.hedge).map((hp, i) => {
+            const species = speciesById.get(hp.speciesId);
+            if (!species) return null;
+            const age = viewYear - project.hedge!.plantedYear;
+            const h = interpolateCurve(species.growth.heightCurve, age);
+            const r = Math.max(canopyRadiusAtAge(species.growth.canopyCurve, age), 0.2);
+            if (hp.isTree) {
+              return (
+                <Tree
+                  key={`hg${i}`}
+                  position={hp.position}
+                  categoryKey={species.category}
+                  height={h}
+                  canopyRadius={r}
+                  terrain={project.terrain}
+                />
+              );
+            }
+            const y = elevation(project.terrain, hp.position);
+            return (
+              <mesh
+                key={`hg${i}`}
+                position={[hp.position.x, y + Math.max(h, 0.3) / 2, hp.position.y]}
+                scale={[1, Math.max(h, 0.3) / (r * 2) || 1, 1]}
+              >
+                <sphereGeometry args={[r, 6, 5]} />
+                <meshStandardMaterial color="#79b791" flatShading />
+              </mesh>
+            );
+          })}
 
         {/* 比例參照:住家旁的 1.7m 人形 */}
         <HumanFigure

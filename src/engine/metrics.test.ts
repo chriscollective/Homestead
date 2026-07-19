@@ -14,6 +14,7 @@ function makeProject(elements: HomesteadProject['elements']): HomesteadProject {
     name: 'test',
     boundary: square100,
     terrain: null,
+    hedge: null,
     elements,
     settings: {
       northAngle: 0,

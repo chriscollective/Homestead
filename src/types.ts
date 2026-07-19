@@ -133,6 +133,23 @@ export type PlacedElement =
   | SwaleElement
   | StreamElement;
 
+// ── 邊界綠籬(M2:沿地界自動佈植)──
+
+export interface HedgeGap {
+  t: number; // 出入口中心位置:沿地界周長的比例(0~1,自第一個頂點起算)
+  width: number; // 出入口寬度(m)
+}
+
+export interface BoundaryHedgeConfig {
+  shrubSpeciesId: string; // 綠籬灌木
+  spacing: number; // 灌木株距(m)
+  treeSpeciesId: string | null; // 間植喬木(null = 純灌木籬)
+  treeEvery: number; // 每 N 株灌木插一株喬木(0 = 不插)
+  inset: number; // 自地界線內縮距離(m)
+  plantedYear: number; // 種植年份(M4 時間軸)
+  gaps: HedgeGap[];
+}
+
 // ── 地勢(M5)──
 
 export interface Terrain {
@@ -176,6 +193,7 @@ export interface HomesteadProject {
   name: string;
   boundary: Point[]; // 地界多邊形(不重複首點;空陣列 = 尚未繪製)
   terrain: Terrain | null; // 地勢(M5;null = 平地)
+  hedge: BoundaryHedgeConfig | null; // 邊界綠籬(null = 未設置)
   elements: PlacedElement[];
   settings: ProjectSettings;
 }

@@ -17,7 +17,9 @@ function makeProject(elements: HomesteadProject['elements'], terrain: HomesteadP
   return {
     name: 't',
     boundary: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }],
-    terrain, elements,
+    terrain,
+    hedge: null,
+    elements,
     settings: {
       northAngle: 0, gridVisible: true, gridSize: 5, showContours: false, showSlope: false,
       showZones: false, contourInterval: 1, homePosition: null, showShadows: false,

@@ -12,6 +12,7 @@ import {
   forestCoverageRatio,
   spacingConflicts,
 } from '../engine/metrics';
+import { hedgeEnclosureRatio } from '../engine/hedge';
 import { synergyHints } from '../engine/permaculture';
 import { zoneWarnings } from '../engine/zones';
 import { useProjectStore } from '../store/useProjectStore';
@@ -72,6 +73,18 @@ export function Dashboard() {
             </div>
             <small>祖傳家園原則:森林約佔 {targetPct}%(含樹冠與林地區塊)</small>
           </div>
+
+          {project.hedge && (
+            <div className="forest-meter">
+              <div className="forest-meter-head">
+                <span>綠籬圍合度</span>
+                <strong className="ok">
+                  {Math.round(hedgeEnclosureRatio(project.boundary, project.hedge.gaps) * 100)}%
+                </strong>
+              </div>
+              <small>地界被邊界綠籬覆蓋的周長比例(扣除出入口)</small>
+            </div>
+          )}
 
           <div className="stat-grid">
             <div>

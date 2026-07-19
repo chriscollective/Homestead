@@ -870,3 +870,18 @@ body {
   cursor: pointer;
   color: var(--earth-dark);
 }
+
+.primary-btn {
+  width: 100%;
+  padding: 9px;
+  border: 1px solid var(--forest);
+  border-radius: 7px;
+  background: var(--forest);
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.primary-btn:hover {
+  background: #24593f;
+}
