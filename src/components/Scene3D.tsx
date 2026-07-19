@@ -634,6 +634,26 @@ export default function Scene3D() {
                 {{ raise: '⬆ 抬升', lower: '⬇ 下降', smooth: '〰 平滑' }[m]}
               </button>
             ))}
+            <button
+              onClick={() => {
+                if (confirm('🚜 整地:將全部地形恢復平整?(可 Ctrl+Z 復原)')) {
+                  useProjectStore.getState().commit((p) =>
+                    p.terrain
+                      ? {
+                          ...p,
+                          terrain: {
+                            ...p.terrain,
+                            grid: p.terrain.grid.map((row) => row.map(() => 0)),
+                          },
+                        }
+                      : p
+                  );
+                }
+              }}
+              title="將全部地形恢復平整"
+            >
+              🚜 整地
+            </button>
             <label className="scene3d-hint">
               半徑
               <input
