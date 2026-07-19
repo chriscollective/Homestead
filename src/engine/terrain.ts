@@ -110,6 +110,38 @@ export function slopeGrid(terrain: Terrain): number[][] {
   return out;
 }
 
+/**
+ * 山體陰影(hillshade):每格受光照程度 0~1(GIS 標準演算法)。
+ * 預設光源自西北(315°)、仰角 45° — 地圖學慣例,讓地形立體感最直觀。
+ */
+export function hillshadeGrid(
+  terrain: Terrain,
+  azimuthDeg = 315,
+  altitudeDeg = 45
+): number[][] {
+  const { resolution, cols, rows, grid } = terrain;
+  const az = ((360 - azimuthDeg + 90) * Math.PI) / 180; // 轉數學角
+  const alt = (altitudeDeg * Math.PI) / 180;
+  const out: number[][] = Array.from({ length: rows }, () => Array(cols).fill(1));
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cL = Math.max(c - 1, 0);
+      const cR = Math.min(c + 1, cols - 1);
+      const rU = Math.max(r - 1, 0);
+      const rD = Math.min(r + 1, rows - 1);
+      const gx = (grid[r][cR] - grid[r][cL]) / ((cR - cL) * resolution);
+      const gy = (grid[rD][c] - grid[rU][c]) / ((rD - rU) * resolution);
+      const slope = Math.atan(Math.hypot(gx, gy));
+      const aspect = Math.atan2(gy, -gx);
+      const shade =
+        Math.sin(alt) * Math.cos(slope) +
+        Math.cos(alt) * Math.sin(slope) * Math.cos(az - aspect);
+      out[r][c] = Math.max(0, Math.min(1, shade));
+    }
+  }
+  return out;
+}
+
 export interface ContourSegment {
   level: number;
   a: Point;

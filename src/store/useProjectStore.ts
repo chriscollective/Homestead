@@ -182,6 +182,7 @@ interface ProjectState {
   viewYear: number; // M4 時間軸目前年份
   viewMode: ViewMode; // 2D / 3D
   brush: { mode: BrushMode; radius: number; strength: number }; // M5 地形筆刷
+  showRelief: boolean; // 2D 地形立體陰影圖層(hillshade)
 
   // ── 動作 ──
   setTool: (tool: Tool) => void;
@@ -192,6 +193,7 @@ interface ProjectState {
   setViewYear: (year: number) => void;
   setViewMode: (mode: ViewMode) => void;
   setBrush: (patch: Partial<ProjectState['brush']>) => void;
+  setShowRelief: (v: boolean) => void;
 
   /** 記錄歷史後套用變更 */
   commit: (fn: (p: HomesteadProject) => HomesteadProject) => void;
@@ -224,6 +226,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   viewYear: 10,
   viewMode: '2d',
   brush: { mode: 'raise', radius: 8, strength: 0.3 },
+  showRelief: true,
 
   setTool: (tool) => set({ tool, selectedId: null }),
   setAreaType: (areaType) => set({ areaType }),
@@ -233,6 +236,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setViewYear: (viewYear) => set({ viewYear }),
   setViewMode: (viewMode) => set({ viewMode }),
   setBrush: (patch) => set({ brush: { ...get().brush, ...patch } }),
+  setShowRelief: (showRelief) => set({ showRelief }),
 
   commit: (fn) => {
     const { project, past } = get();

@@ -5,10 +5,21 @@ export function LayersPanel() {
   const settings = useProjectStore((s) => s.project.settings);
   const terrain = useProjectStore((s) => s.project.terrain);
   const updateSettings = useProjectStore((s) => s.updateSettings);
+  const showRelief = useProjectStore((s) => s.showRelief);
+  const setShowRelief = useProjectStore((s) => s.setShowRelief);
 
   return (
     <div className="panel layers-panel">
       <h3>分析圖層</h3>
+      <label className="layer-toggle">
+        <input
+          type="checkbox"
+          checked={showRelief}
+          onChange={(e) => setShowRelief(e.target.checked)}
+          disabled={!terrain}
+        />
+        地形立體陰影(高程著色 + hillshade)
+      </label>
       <label className="layer-toggle">
         <input
           type="checkbox"

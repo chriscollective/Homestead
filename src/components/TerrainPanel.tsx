@@ -67,6 +67,10 @@ export function TerrainPanel() {
           ? `網格 ${terrain.cols}×${terrain.rows} @ ${terrain.resolution}m`
           : '第一筆會自動建立地形網格(解析度 2m)'}
       </small>
+      <small>
+        🎨 塑形時畫布會即時顯示「立體陰影 + 高程著色」(亮 = 高、暗 = 低);
+        想更直觀,切到 <strong>3D 立體</strong> 按「⛰ 塑形」直接在立體地形上雕塑
+      </small>
       {terrain && (
         <button className="danger-btn" onClick={rebuild}>
           重建地形網格(地界變更後用)

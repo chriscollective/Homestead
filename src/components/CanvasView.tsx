@@ -15,6 +15,7 @@ import {
   applyBrush,
   createTerrain,
   generateContours,
+  hillshadeGrid,
   sampleHeight,
   sampleProfile,
   slopeGrid,
@@ -547,6 +548,61 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
     return m;
   }, [project.elements]);
 
+  const showRelief = useProjectStore((s) => s.showRelief);
+
+  // 地形立體陰影圖層:高程著色 × hillshade,畫進 canvas 轉 dataURL(塑形時逐筆即時更新)
+  const reliefImage = useMemo(() => {
+    const terrain = project.terrain;
+    if (!terrain || (!showRelief && tool !== 'terrain')) return null;
+    const { cols, rows, grid, resolution, origin } = terrain;
+    let min = Infinity;
+    let max = -Infinity;
+    for (const row of grid) {
+      for (const z of row) {
+        if (z < min) min = z;
+        if (z > max) max = z;
+      }
+    }
+    const range = Math.max(max - min, 0.5); // 全平時仍給均勻底色
+    const shade = hillshadeGrid(terrain);
+    // 高程色帶:低=深綠 → 草綠 → 土黃 → 淺褐
+    const stops = [
+      [70, 120, 90],
+      [158, 189, 110],
+      [217, 192, 138],
+      [185, 141, 94],
+    ];
+    const canvas = document.createElement('canvas');
+    canvas.width = cols;
+    canvas.height = rows;
+    const ctx = canvas.getContext('2d')!;
+    const img = ctx.createImageData(cols, rows);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const t = (grid[r][c] - min) / range;
+        const seg = Math.min(Math.floor(t * (stops.length - 1)), stops.length - 2);
+        const f = t * (stops.length - 1) - seg;
+        const bright = 0.55 + 0.45 * shade[r][c];
+        const i = (r * cols + c) * 4;
+        for (let k = 0; k < 3; k++) {
+          img.data[i + k] = Math.round(
+            (stops[seg][k] + (stops[seg + 1][k] - stops[seg][k]) * f) * bright
+          );
+        }
+        img.data[i + 3] = 235;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return {
+      url: canvas.toDataURL(),
+      x: origin.x,
+      y: origin.y,
+      w: cols * resolution,
+      h: rows * resolution,
+      range: max - min,
+    };
+  }, [project.terrain, showRelief, tool]);
+
   // 邊界綠籬植株(純衍生,隨地界/設定/年份自動重算)
   const hedgePlants = useMemo(() => {
     if (!project.hedge || project.boundary.length < 3) return [];
@@ -674,6 +730,21 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
               fill="#f7f4ea"
               stroke="none"
               pointerEvents="none"
+            />
+          )}
+
+          {/* 地形立體陰影(高程著色 × hillshade,M5) */}
+          {reliefImage && (
+            <image
+              href={reliefImage.url}
+              x={reliefImage.x}
+              y={reliefImage.y}
+              width={reliefImage.w}
+              height={reliefImage.h}
+              preserveAspectRatio="none"
+              pointerEvents="none"
+              style={{ imageRendering: 'pixelated' }}
+              opacity={0.85}
             />
           )}
 

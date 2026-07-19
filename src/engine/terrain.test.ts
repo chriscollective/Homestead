@@ -4,6 +4,7 @@ import {
   applyBrush,
   createTerrain,
   generateContours,
+  hillshadeGrid,
   sampleHeight,
   sampleProfile,
   slopeGrid,
@@ -92,6 +93,34 @@ describe('slopeGrid', () => {
     };
     const s = slopeGrid(t);
     expect(s[1][1]).toBeCloseTo(45, 5);
+  });
+});
+
+describe('hillshadeGrid', () => {
+  it('平地均勻受光', () => {
+    const t = createTerrain(square, 2, 0);
+    const s = hillshadeGrid(t);
+    const flat = s[3][3];
+    expect(flat).toBeGreaterThan(0.6);
+    expect(s.every((row) => row.every((v) => Math.abs(v - flat) < 1e-9))).toBe(true);
+  });
+
+  it('西北光源下,朝西北的坡比朝東南的坡亮', () => {
+    // 向東升高的斜面:西側坡面朝西(近光源)、東側…同一斜面各處法向相同
+    // 改用山脊:中央高,西坡朝西北亮、東坡朝東南暗
+    const t: Terrain = {
+      resolution: 1,
+      origin: { x: 0, y: 0 },
+      cols: 5,
+      rows: 3,
+      grid: [
+        [0, 2, 4, 2, 0],
+        [0, 2, 4, 2, 0],
+        [0, 2, 4, 2, 0],
+      ],
+    };
+    const s = hillshadeGrid(t);
+    expect(s[1][1]).toBeGreaterThan(s[1][3]); // 西坡亮於東坡
   });
 });
 
