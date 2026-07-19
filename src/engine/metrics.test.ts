@@ -34,6 +34,7 @@ function makeProject(elements: HomesteadProject['elements']): HomesteadProject {
       people: 4,
       windTurbineKw: 0,
       windClass: 'normal',
+      showSectors: false,
     },
   };
 }
@@ -52,6 +53,7 @@ const camphor: PlantSpecies = {
   needs: { sun: 'full', water: 2, windTolerance: 2 },
   climateZones: ['north'],
   tags: [],
+  forestLayer: 'canopy',
   isNative: true,
   sources: [],
 };

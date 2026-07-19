@@ -17,6 +17,7 @@ export type Tool =
   | 'plant'
   | 'area'
   | 'pond'
+  | 'swale'
   | 'building'
   | 'measure'
   | 'terrain'
@@ -72,6 +73,7 @@ function defaultSettings(): ProjectSettings {
     people: 4,
     windTurbineKw: 0,
     windClass: 'normal',
+    showSectors: false,
   };
 }
 

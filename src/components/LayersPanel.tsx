@@ -47,6 +47,14 @@ export function LayersPanel() {
         />
         樸門分區環(Zone 1-4)
       </label>
+      <label className="layer-toggle">
+        <input
+          type="checkbox"
+          checked={settings.showSectors}
+          onChange={(e) => updateSettings({ showSectors: e.target.checked })}
+        />
+        扇形分析(季風/颱風/冬陽方向)
+      </label>
       {!terrain && <small>地勢圖層需先用「⛰ 地形」工具塑形</small>}
       {!settings.homePosition && <small>分區環需先用「🏠 住家」工具放置住家</small>}
     </div>

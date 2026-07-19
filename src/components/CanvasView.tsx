@@ -21,7 +21,7 @@ import {
 } from '../engine/terrain';
 import { ZONE_RADII } from '../engine/zones';
 import { newId, useProjectStore } from '../store/useProjectStore';
-import type { AreaType, PlacedElement, Point } from '../types';
+import type { AreaType, HomesteadProject, PlacedElement, Point } from '../types';
 import { AnalysisLayers } from './AnalysisLayers';
 
 interface View {
@@ -42,6 +42,7 @@ const AREA_STYLES: Record<AreaType, { fill: string; stroke: string; label: strin
   forest: { fill: 'rgba(45,106,79,0.35)', stroke: '#2d6a4f', label: '林地' },
   garden: { fill: 'rgba(224,178,84,0.4)', stroke: '#a67c26', label: '菜園' },
   meadow: { fill: 'rgba(163,181,107,0.35)', stroke: '#7a8c4a', label: '草地' },
+  food_forest: { fill: 'rgba(64,145,108,0.3)', stroke: '#40916c', label: '食物森林' },
 };
 
 const CANOPY_STYLES: Record<string, { fill: string; stroke: string }> = {
@@ -181,6 +182,15 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
   const finishDraft = useCallback(() => {
     const clean = dedupe(draftRef.current);
     setDraft([]);
+    if (tool === 'swale') {
+      if (clean.length >= 2) {
+        commit((p) => ({
+          ...p,
+          elements: [...p.elements, { id: newId('swale'), kind: 'swale', line: clean }],
+        }));
+      }
+      return;
+    }
     if (clean.length < 3) return;
     if (tool === 'boundary') {
       commit((p) => ({ ...p, boundary: clean }));
@@ -261,9 +271,9 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
     const p = toWorld(e.clientX, e.clientY);
     if (tool === 'select') {
       startPan(e);
-    } else if (tool === 'boundary' || tool === 'area' || tool === 'pond') {
-      // 點擊起點附近 → 閉合
-      if (draft.length >= 3 && distance(p, draft[0]) < 12 / view.scale) {
+    } else if (tool === 'boundary' || tool === 'area' || tool === 'pond' || tool === 'swale') {
+      // 點擊起點附近 → 閉合(swale 為開放線,不閉合)
+      if (tool !== 'swale' && draft.length >= 3 && distance(p, draft[0]) < 12 / view.scale) {
         finishDraft();
         return;
       }
@@ -346,11 +356,16 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
       drag.last = p;
       transient((proj) => ({
         ...proj,
-        elements: proj.elements.map((el) =>
-          el.id === drag.id && (el.kind === 'area' || el.kind === 'water')
-            ? { ...el, polygon: el.polygon.map((q) => ({ x: q.x + dx, y: q.y + dy })) }
-            : el
-        ),
+        elements: proj.elements.map((el) => {
+          if (el.id !== drag.id) return el;
+          if (el.kind === 'area' || el.kind === 'water') {
+            return { ...el, polygon: el.polygon.map((q) => ({ x: q.x + dx, y: q.y + dy })) };
+          }
+          if (el.kind === 'swale') {
+            return { ...el, line: el.line.map((q) => ({ x: q.x + dx, y: q.y + dy })) };
+          }
+          return el;
+        }),
       }));
     } else if (drag.type === 'vertex') {
       transient((proj) => {
@@ -360,11 +375,16 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
         }
         return {
           ...proj,
-          elements: proj.elements.map((el) =>
-            el.id === drag.target && (el.kind === 'area' || el.kind === 'water')
-              ? { ...el, polygon: el.polygon.map((q, i) => (i === drag.index ? p : q)) }
-              : el
-          ),
+          elements: proj.elements.map((el) => {
+            if (el.id !== drag.target) return el;
+            if (el.kind === 'area' || el.kind === 'water') {
+              return { ...el, polygon: el.polygon.map((q, i) => (i === drag.index ? p : q)) };
+            }
+            if (el.kind === 'swale') {
+              return { ...el, line: el.line.map((q, i) => (i === drag.index ? p : q)) };
+            }
+            return el;
+          }),
         };
       });
     }
@@ -425,11 +445,16 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
       }
       return {
         ...proj,
-        elements: proj.elements.map((el) =>
-          el.id === target && (el.kind === 'area' || el.kind === 'water') && el.polygon.length > 3
-            ? { ...el, polygon: el.polygon.filter((_, i) => i !== index) }
-            : el
-        ),
+        elements: proj.elements.map((el) => {
+          if (el.id !== target) return el;
+          if ((el.kind === 'area' || el.kind === 'water') && el.polygon.length > 3) {
+            return { ...el, polygon: el.polygon.filter((_, i) => i !== index) };
+          }
+          if (el.kind === 'swale' && el.line.length > 2) {
+            return { ...el, line: el.line.filter((_, i) => i !== index) };
+          }
+          return el;
+        }),
       };
     });
   };
@@ -452,10 +477,18 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
       return {
         ...proj,
         elements: proj.elements.map((el) => {
-          if (el.id !== target || (el.kind !== 'area' && el.kind !== 'water')) return el;
-          const polygon = [...el.polygon];
-          polygon.splice(index + 1, 0, p);
-          return { ...el, polygon };
+          if (el.id !== target) return el;
+          if (el.kind === 'area' || el.kind === 'water') {
+            const polygon = [...el.polygon];
+            polygon.splice(index + 1, 0, p);
+            return { ...el, polygon };
+          }
+          if (el.kind === 'swale') {
+            const line = [...el.line];
+            line.splice(index + 1, 0, p);
+            return { ...el, line };
+          }
+          return el;
         }),
       };
     });
@@ -541,10 +574,14 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
   }, [view.scale]);
 
   const selectedPolygonTarget = useMemo(() => {
-    if (selectedId === 'boundary') return { target: 'boundary' as const, polygon: project.boundary };
+    if (selectedId === 'boundary')
+      return { target: 'boundary' as const, polygon: project.boundary, open: false };
     const el = project.elements.find((x) => x.id === selectedId);
     if (el && (el.kind === 'area' || el.kind === 'water')) {
-      return { target: el.id, polygon: el.polygon };
+      return { target: el.id, polygon: el.polygon, open: false };
+    }
+    if (el && el.kind === 'swale') {
+      return { target: el.id, polygon: el.line, open: true };
     }
     return null;
   }, [selectedId, project]);
@@ -555,6 +592,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
     plant: `點擊放置「${speciesById.get(selectedSpeciesId)?.nameZh ?? ''}」(種植於第 ${viewYear} 年)`,
     area: `逐點點擊繪製${AREA_STYLES[areaType].label}區塊;雙擊完成`,
     pond: '逐點點擊繪製池塘;雙擊完成',
+    swale: '沿等高線逐點繪製集水溝;雙擊完成(建議先開等高線圖層對照)',
     building: `點擊放置「${buildingModelById.get(selectedBuildingId)?.label ?? ''}」(黑粗邊 = 正面/門)`,
     measure: '逐點點擊測距;Esc 清除',
     terrain: `地形筆刷:${{ raise: '抬升', lower: '下降', smooth: '平滑' }[brush.mode]}(拖曳塗抹;右側面板調整)`,
@@ -725,6 +763,26 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
             return null;
           })}
 
+          {/* 等高集水溝 swale(M13) */}
+          {project.elements.map((el) => {
+            if (el.kind !== 'swale') return null;
+            return (
+              <polyline
+                key={el.id}
+                points={pointsAttr(el.line)}
+                fill="none"
+                stroke={el.id === selectedId ? '#155e75' : '#0e7490'}
+                strokeWidth={el.id === selectedId ? 4 : 3}
+                strokeDasharray="10 5"
+                strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
+                pointerEvents={tool === 'select' ? 'stroke' : 'none'}
+                onPointerDown={(e) => onElementPointerDown(e, el)}
+                style={{ cursor: tool === 'select' ? 'move' : undefined }}
+              />
+            );
+          })}
+
           {/* 建物(M8) */}
           {project.elements.map((el) => {
             if (el.kind !== 'building') return null;
@@ -852,6 +910,11 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
           {/* 環境分析圖層(M7:陰影/日照/水流/風) */}
           <AnalysisLayers project={project} viewYear={viewYear} />
 
+          {/* 扇形分析(M13):外部能量與影響的方向 */}
+          {project.settings.showSectors && (
+            <SectorLayer project={project} viewScale={view.scale} />
+          )}
+
           {/* 分區距離環(M13 分析層) */}
           {project.settings.showZones && home && (
             <g pointerEvents="none">
@@ -930,12 +993,14 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
           {selectedPolygonTarget && tool === 'select' && (
             <g>
               {selectedPolygonTarget.polygon.map((p, i) => {
+                const isClosingSegment =
+                  selectedPolygonTarget.open && i === selectedPolygonTarget.polygon.length - 1;
                 const next =
                   selectedPolygonTarget.polygon[(i + 1) % selectedPolygonTarget.polygon.length];
                 const mid = { x: (p.x + next.x) / 2, y: (p.y + next.y) / 2 };
                 return (
                   <g key={i}>
-                    <rect
+                    {!isClosingSegment && <rect
                       x={mid.x - 3.5 / view.scale}
                       y={mid.y - 3.5 / view.scale}
                       width={7 / view.scale}
@@ -948,7 +1013,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                       onPointerDown={(e) =>
                         onMidpointPointerDown(e, selectedPolygonTarget.target, i)
                       }
-                    />
+                    />}
                     <circle
                       cx={p.x}
                       cy={p.y}
@@ -1007,13 +1072,23 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
               <polyline
                 points={pointsAttr(cursor ? [...draft, cursor] : draft)}
                 fill={
-                  tool === 'pond'
-                    ? 'rgba(103,169,207,0.25)'
-                    : tool === 'area'
-                      ? AREA_STYLES[areaType].fill
-                      : 'rgba(107,79,42,0.08)'
+                  tool === 'swale'
+                    ? 'none'
+                    : tool === 'pond'
+                      ? 'rgba(103,169,207,0.25)'
+                      : tool === 'area'
+                        ? AREA_STYLES[areaType].fill
+                        : 'rgba(107,79,42,0.08)'
                 }
-                stroke={tool === 'pond' ? '#2b6c96' : tool === 'area' ? AREA_STYLES[areaType].stroke : '#6b4f2a'}
+                stroke={
+                  tool === 'swale'
+                    ? '#0e7490'
+                    : tool === 'pond'
+                      ? '#2b6c96'
+                      : tool === 'area'
+                        ? AREA_STYLES[areaType].stroke
+                        : '#6b4f2a'
+                }
                 strokeWidth={2}
                 strokeDasharray="6 4"
                 vectorEffect="non-scaling-stroke"
@@ -1095,6 +1170,81 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
         </button>
       </div>
     </div>
+  );
+}
+
+// M13 扇形定義:方位角(自北順時針)± 半寬,標註外部能量/影響
+const SECTORS: { label: string; azimuth: number; halfAngle: number; color: string }[] = [
+  { label: '冬季東北季風', azimuth: 45, halfAngle: 25, color: '#4a6fa5' },
+  { label: '夏季西南風', azimuth: 225, halfAngle: 25, color: '#e08e45' },
+  { label: '颱風主向(東)', azimuth: 90, halfAngle: 18, color: '#b3261e' },
+  { label: '冬至低角度日照', azimuth: 180, halfAngle: 30, color: '#d9a441' },
+];
+
+/** 扇形分析圖層:以住家(或地界中心)為圓心的方向扇形 */
+function SectorLayer({
+  project,
+  viewScale,
+}: {
+  project: HomesteadProject;
+  viewScale: number;
+}) {
+  const data = useMemo(() => {
+    if (project.boundary.length < 3) return null;
+    const box = boundingBox(project.boundary);
+    const center = project.settings.homePosition ?? {
+      x: (box.minX + box.maxX) / 2,
+      y: (box.minY + box.maxY) / 2,
+    };
+    const radius = Math.max(box.maxX - box.minX, box.maxY - box.minY) * 0.75;
+    return { center, radius };
+  }, [project.boundary, project.settings.homePosition]);
+  if (!data) return null;
+
+  // 方位角 → 平面單位向量(x=東、y=南;北 = -y)
+  const dir = (azDeg: number) => {
+    const az = (azDeg * Math.PI) / 180;
+    return { x: Math.sin(az), y: -Math.cos(az) };
+  };
+
+  return (
+    <g pointerEvents="none">
+      {SECTORS.map((s) => {
+        const a1 = dir(s.azimuth - s.halfAngle);
+        const a2 = dir(s.azimuth + s.halfAngle);
+        const mid = dir(s.azimuth);
+        const { center, radius } = data;
+        const p1 = { x: center.x + a1.x * radius, y: center.y + a1.y * radius };
+        const p2 = { x: center.x + a2.x * radius, y: center.y + a2.y * radius };
+        const labelPos = {
+          x: center.x + mid.x * radius * 0.92,
+          y: center.y + mid.y * radius * 0.92,
+        };
+        return (
+          <g key={s.label}>
+            <path
+              d={`M ${center.x} ${center.y} L ${p1.x} ${p1.y} A ${radius} ${radius} 0 0 1 ${p2.x} ${p2.y} Z`}
+              fill={s.color}
+              opacity={0.1}
+              stroke={s.color}
+              strokeWidth={1}
+              strokeDasharray="6 5"
+              vectorEffect="non-scaling-stroke"
+            />
+            <text
+              x={labelPos.x}
+              y={labelPos.y}
+              fontSize={12 / viewScale}
+              fill={s.color}
+              textAnchor="middle"
+              fontWeight="bold"
+            >
+              {s.label}
+            </text>
+          </g>
+        );
+      })}
+    </g>
   );
 }
 
