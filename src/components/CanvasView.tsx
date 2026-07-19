@@ -428,6 +428,14 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
     svgRef.current?.setPointerCapture(e.pointerId);
   };
 
+  /** 右鍵直接刪除元素(可 Ctrl+Z 復原);任何工具下皆可 */
+  const onElementContextMenu = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    commit((p) => ({ ...p, elements: p.elements.filter((el) => el.id !== id) }));
+    if (useProjectStore.getState().selectedId === id) select(null);
+  };
+
   const onVertexPointerDown = (
     e: ReactPointerEvent,
     target: 'boundary' | string,
@@ -725,6 +733,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                     vectorEffect="non-scaling-stroke"
                     pointerEvents={tool === 'select' ? 'auto' : 'none'}
                     onPointerDown={(e) => onElementPointerDown(e, el)}
+                    onContextMenu={(e) => onElementContextMenu(e, el.id)}
                     style={{ cursor: tool === 'select' ? 'move' : undefined }}
                   />
                   {view.scale > 1.5 && (
@@ -753,6 +762,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                     vectorEffect="non-scaling-stroke"
                     pointerEvents={tool === 'select' ? 'auto' : 'none'}
                     onPointerDown={(e) => onElementPointerDown(e, el)}
+                    onContextMenu={(e) => onElementContextMenu(e, el.id)}
                     style={{ cursor: tool === 'select' ? 'move' : undefined }}
                   />
                   {view.scale > 1.5 && (
@@ -789,6 +799,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                 vectorEffect="non-scaling-stroke"
                 pointerEvents={tool === 'select' ? 'stroke' : 'none'}
                 onPointerDown={(e) => onElementPointerDown(e, el)}
+                onContextMenu={(e) => onElementContextMenu(e, el.id)}
                 style={{ cursor: tool === 'select' ? 'move' : undefined }}
               />
             );
@@ -809,6 +820,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                 vectorEffect="non-scaling-stroke"
                 pointerEvents={tool === 'select' ? 'stroke' : 'none'}
                 onPointerDown={(e) => onElementPointerDown(e, el)}
+                onContextMenu={(e) => onElementContextMenu(e, el.id)}
                 style={{ cursor: tool === 'select' ? 'move' : undefined }}
               />
             );
@@ -825,6 +837,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                 transform={`translate(${el.position.x},${el.position.y}) rotate(${el.rotationDeg})`}
                 pointerEvents={tool === 'select' ? 'auto' : 'none'}
                 onPointerDown={(e) => onElementPointerDown(e, el)}
+                onContextMenu={(e) => onElementContextMenu(e, el.id)}
                 style={{ cursor: tool === 'select' ? 'move' : undefined }}
               >
                 <rect
@@ -881,6 +894,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                 key={el.id}
                 pointerEvents={tool === 'select' ? 'auto' : 'none'}
                 onPointerDown={(e) => onElementPointerDown(e, el)}
+                onContextMenu={(e) => onElementContextMenu(e, el.id)}
                 style={{ cursor: tool === 'select' ? 'move' : undefined }}
                 opacity={alive ? 1 : 0.3}
               >
