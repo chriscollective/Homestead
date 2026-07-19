@@ -22,7 +22,7 @@ import {
 } from '../engine/terrain';
 import { generateHedgePlants, nearestPerimeterT, pointAtPerimeter } from '../engine/hedge';
 import { polygonPerimeter } from '../engine/geometry';
-import { ZONE_RADII } from '../engine/zones';
+import { zoneRadii } from '../engine/zones';
 import { newId, useProjectStore } from '../store/useProjectStore';
 import type { AreaType, HomesteadProject, PlacedElement, Point } from '../types';
 import { AnalysisLayers } from './AnalysisLayers';
@@ -1133,7 +1133,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
           {/* 分區距離環(M13 分析層) */}
           {project.settings.showZones && home && (
             <g pointerEvents="none">
-              {[...ZONE_RADII].reverse().map((z) => (
+              {[...zoneRadii(project.boundary, home)].reverse().map((z) => (
                 <g key={z.zone}>
                   <circle
                     cx={home.x}

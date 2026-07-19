@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { HomesteadProject } from '../types';
-import { zoneWarnings } from './zones';
+import { zoneRadii, zoneWarnings } from './zones';
 
 function makeProject(
   homePosition: { x: number; y: number } | null,
@@ -67,5 +67,24 @@ describe('zoneWarnings', () => {
     expect(w).toHaveLength(1);
     expect(w[0].elementId).toBe('g1');
     expect(w[0].message).toContain('100m');
+  });
+});
+
+describe('zoneRadii', () => {
+  it('依住家到地界最遠頂點的距離縮放,Zone 4 不超出基地', () => {
+    const boundary = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+    ];
+    // 住家在中心:最遠頂點距離 = 對角一半 ≈ 70.7m
+    const radii = zoneRadii(boundary, { x: 50, y: 50 });
+    expect(radii[0].radius).toBeCloseTo(70.71 * 0.15, 1);
+    expect(radii[3].radius).toBeCloseTo(70.71 * 0.85, 1);
+    expect(radii[3].radius).toBeLessThan(70.71); // Zone 4 在地界內
+    // 住家偏一角:半徑跟著放大但仍以最遠頂點為界
+    const corner = zoneRadii(boundary, { x: 10, y: 10 });
+    expect(corner[3].radius).toBeLessThan(Math.hypot(90, 90));
   });
 });
