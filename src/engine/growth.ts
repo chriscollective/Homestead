@@ -27,3 +27,17 @@ export function matureCanopyRadius(canopyCurve: YearValue[]): number {
   if (canopyCurve.length === 0) return 0;
   return canopyCurve[canopyCurve.length - 1].value / 2;
 }
+
+/** 某樹齡的冠幅半徑(m)(M4 時間軸) */
+export function canopyRadiusAtAge(canopyCurve: YearValue[], age: number): number {
+  return interpolateCurve(canopyCurve, age) / 2;
+}
+
+/** 植物在某年份是否存活(已種植且未移除) */
+export function isPlantAlive(
+  plantedYear: number,
+  removedYear: number | undefined,
+  year: number
+): boolean {
+  return year >= plantedYear && (removedYear === undefined || year < removedYear);
+}

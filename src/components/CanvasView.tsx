@@ -8,8 +8,17 @@ import {
 } from 'react';
 import { CATEGORY_LABELS, speciesById } from '../data/plants';
 import { boundingBox, distance, polygonArea, polylineLength } from '../engine/geometry';
-import { matureCanopyRadius } from '../engine/growth';
+import { canopyRadiusAtAge, isPlantAlive, matureCanopyRadius } from '../engine/growth';
 import { spacingConflicts } from '../engine/metrics';
+import {
+  applyBrush,
+  createTerrain,
+  generateContours,
+  sampleHeight,
+  sampleProfile,
+  slopeGrid,
+} from '../engine/terrain';
+import { ZONE_RADII } from '../engine/zones';
 import { newId, useProjectStore } from '../store/useProjectStore';
 import type { AreaType, PlacedElement, Point } from '../types';
 
@@ -24,6 +33,7 @@ type DragState =
   | { type: 'plant'; id: string; offset: Point }
   | { type: 'poly'; id: string; last: Point }
   | { type: 'vertex'; target: 'boundary' | string; index: number }
+  | { type: 'brush' }
   | null;
 
 const AREA_STYLES: Record<AreaType, { fill: string; stroke: string; label: string }> = {
@@ -58,18 +68,22 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
   const areaType = useProjectStore((s) => s.areaType);
   const selectedSpeciesId = useProjectStore((s) => s.selectedSpeciesId);
   const selectedId = useProjectStore((s) => s.selectedId);
+  const viewYear = useProjectStore((s) => s.viewYear);
+  const brush = useProjectStore((s) => s.brush);
   const select = useProjectStore((s) => s.select);
   const setTool = useProjectStore((s) => s.setTool);
   const commit = useProjectStore((s) => s.commit);
   const beginDrag = useProjectStore((s) => s.beginDrag);
   const transient = useProjectStore((s) => s.transient);
   const endDrag = useProjectStore((s) => s.endDrag);
+  const updateSettings = useProjectStore((s) => s.updateSettings);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>({ scale: 5, tx: 60, ty: 40 });
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [draft, setDraft] = useState<Point[]>([]);
   const [measure, setMeasure] = useState<Point[]>([]);
+  const [profilePts, setProfilePts] = useState<Point[]>([]);
   const [cursor, setCursor] = useState<Point | null>(null);
   const dragRef = useRef<DragState>(null);
   const viewRef = useRef(view);
@@ -149,6 +163,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
   const cancelDraft = useCallback(() => {
     setDraft([]);
     setMeasure([]);
+    setProfilePts([]);
   }, []);
 
   // 工具切換時取消進行中的繪製
@@ -219,6 +234,22 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
   };
 
+  const applyTerrainBrush = useCallback(
+    (p: Point) => {
+      transient((proj) => {
+        const terrain = proj.terrain ?? createTerrain(proj.boundary);
+        return {
+          ...proj,
+          terrain: {
+            ...terrain,
+            grid: applyBrush(terrain, p, brush.radius, brush.mode, brush.strength),
+          },
+        };
+      });
+    },
+    [transient, brush]
+  );
+
   const onSvgPointerDown = (e: ReactPointerEvent<SVGSVGElement>) => {
     if (e.button === 1) {
       // 中鍵:任何工具下都可平移
@@ -248,12 +279,23 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
             kind: 'plant',
             speciesId: selectedSpeciesId,
             position: p,
-            plantedYear: 0,
+            plantedYear: viewYear,
           },
         ],
       }));
     } else if (tool === 'measure') {
       setMeasure((m) => [...m, p]);
+    } else if (tool === 'terrain') {
+      if (project.boundary.length < 3) return;
+      beginDrag();
+      applyTerrainBrush(p);
+      dragRef.current = { type: 'brush' };
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    } else if (tool === 'profile') {
+      setProfilePts((pts) => (pts.length >= 2 ? [p] : [...pts, p]));
+    } else if (tool === 'home') {
+      updateSettings({ homePosition: p, showZones: true });
+      setTool('select');
     }
   };
 
@@ -267,6 +309,8 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
       const dy = e.clientY - drag.startClientY;
       if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
       setView((v) => ({ ...v, tx: drag.startTx + dx, ty: drag.startTy + dy }));
+    } else if (drag.type === 'brush') {
+      applyTerrainBrush(p);
     } else if (drag.type === 'plant') {
       transient((proj) => ({
         ...proj,
@@ -435,6 +479,39 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
     return { xs, ys, minX, minY, maxX, maxY, step };
   }, [project.settings.gridVisible, project.settings.gridSize, view, size]);
 
+  // 等高線(M5)
+  const contourSegs = useMemo(() => {
+    if (!project.settings.showContours || !project.terrain) return [];
+    return generateContours(project.terrain, project.settings.contourInterval);
+  }, [project.settings.showContours, project.settings.contourInterval, project.terrain]);
+
+  // 坡度熱圖(M5):>15° 橘、>30° 紅
+  const slopeCells = useMemo(() => {
+    if (!project.settings.showSlope || !project.terrain) return [];
+    const slopes = slopeGrid(project.terrain);
+    const { resolution, origin, cols, rows } = project.terrain;
+    const cells: { x: number; y: number; level: 1 | 2 }[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const s = slopes[r][c];
+        if (s > 15) {
+          cells.push({
+            x: origin.x + c * resolution - resolution / 2,
+            y: origin.y + r * resolution - resolution / 2,
+            level: s > 30 ? 2 : 1,
+          });
+        }
+      }
+    }
+    return cells;
+  }, [project.settings.showSlope, project.terrain]);
+
+  // 剖面(M5)
+  const profile = useMemo(() => {
+    if (profilePts.length !== 2 || !project.terrain) return null;
+    return sampleProfile(project.terrain, profilePts[0], profilePts[1]);
+  }, [profilePts, project.terrain]);
+
   // 比例尺:取接近 80px 的整數公尺
   const scaleBar = useMemo(() => {
     const target = 80 / view.scale;
@@ -455,14 +532,18 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
   const toolHint: string = {
     select: '點選元素/拖曳移動;右鍵頂點可刪除;空白處拖曳平移、滾輪縮放',
     boundary: '逐點點擊繪製地界;點擊起點或雙擊完成;Esc 取消',
-    plant: `點擊放置「${speciesById.get(selectedSpeciesId)?.nameZh ?? ''}」`,
+    plant: `點擊放置「${speciesById.get(selectedSpeciesId)?.nameZh ?? ''}」(種植於第 ${viewYear} 年)`,
     area: `逐點點擊繪製${AREA_STYLES[areaType].label}區塊;雙擊完成`,
     pond: '逐點點擊繪製池塘;雙擊完成',
     measure: '逐點點擊測距;Esc 清除',
+    terrain: `地形筆刷:${{ raise: '抬升', lower: '下降', smooth: '平滑' }[brush.mode]}(拖曳塗抹;右側面板調整)`,
+    profile: project.terrain ? '點擊兩點顯示地形剖面;Esc 清除' : '尚無地形 — 請先用地形筆刷塑形',
+    home: '點擊放置住家位置(分區分析中心)',
   }[tool];
 
   const draftClosable = draft.length >= 3;
   const measureLen = polylineLength(cursor && measure.length > 0 ? [...measure, cursor] : measure);
+  const home = project.settings.homePosition;
 
   return (
     <div className="canvas-container" ref={containerRef}>
@@ -479,7 +560,7 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
           cursor:
             tool === 'select'
               ? 'default'
-              : tool === 'plant'
+              : tool === 'plant' || tool === 'home'
                 ? 'copy'
                 : 'crosshair',
         }}
@@ -521,6 +602,41 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                   stroke={y === 0 ? '#b9b29c' : '#d8d2bd'}
                   strokeWidth={1}
                   vectorEffect="non-scaling-stroke"
+                />
+              ))}
+            </g>
+          )}
+
+          {/* 坡度熱圖(分析層) */}
+          {project.terrain && slopeCells.length > 0 && (
+            <g pointerEvents="none">
+              {slopeCells.map((c, i) => (
+                <rect
+                  key={i}
+                  x={c.x}
+                  y={c.y}
+                  width={project.terrain!.resolution}
+                  height={project.terrain!.resolution}
+                  fill={c.level === 2 ? 'rgba(198,40,40,0.4)' : 'rgba(239,140,42,0.35)'}
+                />
+              ))}
+            </g>
+          )}
+
+          {/* 等高線(分析層) */}
+          {contourSegs.length > 0 && (
+            <g pointerEvents="none">
+              {contourSegs.map((s, i) => (
+                <line
+                  key={i}
+                  x1={s.a.x}
+                  y1={s.a.y}
+                  x2={s.b.x}
+                  y2={s.b.y}
+                  stroke="#8d6e63"
+                  strokeWidth={Math.abs(s.level % 5) < 1e-9 ? 1.8 : 1}
+                  vectorEffect="non-scaling-stroke"
+                  opacity={0.8}
                 />
               ))}
             </g>
@@ -588,12 +704,16 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
             return null;
           })}
 
-          {/* 植栽(樹冠圈 + 植株點) */}
+          {/* 植栽(依時間軸年份呈現當年冠幅,M4) */}
           {project.elements.map((el) => {
             if (el.kind !== 'plant') return null;
             const species = speciesById.get(el.speciesId);
             if (!species) return null;
-            const radius = matureCanopyRadius(species.growth.canopyCurve);
+            const alive = isPlantAlive(el.plantedYear, el.removedYear, viewYear);
+            const age = viewYear - el.plantedYear;
+            const radius = alive
+              ? canopyRadiusAtAge(species.growth.canopyCurve, age)
+              : matureCanopyRadius(species.growth.canopyCurve);
             const style = CANOPY_STYLES[species.category] ?? CANOPY_STYLES.tree_fruit;
             const conflicted = conflictIds.has(el.id);
             const isSelected = el.id === selectedId;
@@ -603,28 +723,35 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                 pointerEvents={tool === 'select' ? 'auto' : 'none'}
                 onPointerDown={(e) => onElementPointerDown(e, el)}
                 style={{ cursor: tool === 'select' ? 'move' : undefined }}
+                opacity={alive ? 1 : 0.3}
               >
                 <circle
                   cx={el.position.x}
                   cy={el.position.y}
-                  r={Math.max(radius, 0.3)}
-                  fill={style.fill}
+                  r={alive ? Math.max(radius, 0.3) : 0.8}
+                  fill={alive ? style.fill : 'none'}
                   stroke={conflicted ? '#d62828' : isSelected ? '#1b4332' : style.stroke}
                   strokeWidth={isSelected || conflicted ? 2.5 : 1.2}
-                  strokeDasharray={conflicted ? '6 4' : undefined}
+                  strokeDasharray={conflicted || !alive ? '6 4' : undefined}
                   vectorEffect="non-scaling-stroke"
                 />
-                <circle cx={el.position.x} cy={el.position.y} r={0.25} fill="#5c4326" />
+                {alive && (
+                  <circle cx={el.position.x} cy={el.position.y} r={0.25} fill="#5c4326" />
+                )}
                 {view.scale > 3 && (
                   <text
                     x={el.position.x}
-                    y={el.position.y - radius - 4 / view.scale}
+                    y={el.position.y - (alive ? radius : 0.8) - 4 / view.scale}
                     fontSize={12 / view.scale}
                     fill="#3d3425"
                     textAnchor="middle"
                     pointerEvents="none"
                   >
                     {species.nameZh}
+                    {!alive &&
+                      (viewYear < el.plantedYear
+                        ? `(第${el.plantedYear}年種)`
+                        : `(第${el.removedYear}年移除)`)}
                   </text>
                 )}
               </g>
@@ -651,6 +778,62 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
               />
             );
           })}
+
+          {/* 分區距離環(M13 分析層) */}
+          {project.settings.showZones && home && (
+            <g pointerEvents="none">
+              {[...ZONE_RADII].reverse().map((z) => (
+                <g key={z.zone}>
+                  <circle
+                    cx={home.x}
+                    cy={home.y}
+                    r={z.radius}
+                    fill="none"
+                    stroke="#7b5ea7"
+                    strokeWidth={1.2}
+                    strokeDasharray="8 6"
+                    vectorEffect="non-scaling-stroke"
+                    opacity={0.7}
+                  />
+                  {view.scale > 1.2 && (
+                    <text
+                      x={home.x}
+                      y={home.y - z.radius + 12 / view.scale}
+                      fontSize={11 / view.scale}
+                      fill="#7b5ea7"
+                      textAnchor="middle"
+                      opacity={0.9}
+                    >
+                      {z.label}
+                    </text>
+                  )}
+                </g>
+              ))}
+            </g>
+          )}
+
+          {/* 住家標記(M13 Zone 0) */}
+          {home && (
+            <g pointerEvents="none">
+              <circle
+                cx={home.x}
+                cy={home.y}
+                r={8 / view.scale}
+                fill="#fffdf6"
+                stroke="#7b5ea7"
+                strokeWidth={2}
+                vectorEffect="non-scaling-stroke"
+              />
+              <text
+                x={home.x}
+                y={home.y + 4.5 / view.scale}
+                fontSize={11 / view.scale}
+                textAnchor="middle"
+              >
+                🏠
+              </text>
+            </g>
+          )}
 
           {/* 地界外框(可點選) */}
           {project.boundary.length >= 3 && (
@@ -708,6 +891,40 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
                   </g>
                 );
               })}
+            </g>
+          )}
+
+          {/* 地形筆刷游標 */}
+          {tool === 'terrain' && cursor && (
+            <circle
+              cx={cursor.x}
+              cy={cursor.y}
+              r={brush.radius}
+              fill={brush.mode === 'lower' ? 'rgba(141,110,99,0.12)' : 'rgba(141,110,99,0.18)'}
+              stroke="#8d6e63"
+              strokeWidth={1.5}
+              strokeDasharray="4 4"
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+          )}
+
+          {/* 剖面線 */}
+          {profilePts.length > 0 && (
+            <g pointerEvents="none">
+              <polyline
+                points={pointsAttr(
+                  profilePts.length === 1 && cursor ? [...profilePts, cursor] : profilePts
+                )}
+                fill="none"
+                stroke="#5e35b1"
+                strokeWidth={2}
+                strokeDasharray="6 3"
+                vectorEffect="non-scaling-stroke"
+              />
+              {profilePts.map((p, i) => (
+                <circle key={i} cx={p.x} cy={p.y} r={4 / view.scale} fill="#5e35b1" />
+              ))}
             </g>
           )}
 
@@ -785,17 +1002,71 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
         <span>{scaleBar.meters} m</span>
       </div>
 
+      {/* 剖面圖(M5) */}
+      {profile && <ProfileChart profile={profile} />}
+
       {/* 狀態列 */}
       <div className="status-bar">
         <span className="status-hint">{toolHint}</span>
         <span className="status-coords">
-          {cursor ? `x ${cursor.x.toFixed(1)}m, y ${cursor.y.toFixed(1)}m` : ''}
+          {cursor
+            ? `x ${cursor.x.toFixed(1)}m, y ${cursor.y.toFixed(1)}m` +
+              (project.terrain
+                ? `, 高程 ${sampleHeight(project.terrain, cursor).toFixed(1)}m`
+                : '')
+            : ''}
           {'　'}縮放 {view.scale.toFixed(1)} px/m
         </span>
         <button className="status-fit" onClick={fitView} title="縮放至地界">
           ⌖ 全覽
         </button>
       </div>
+    </div>
+  );
+}
+
+/** 地形剖面小圖 */
+function ProfileChart({ profile }: { profile: { dist: number; height: number }[] }) {
+  const W = 260;
+  const H = 100;
+  const pad = 24;
+  const maxDist = profile[profile.length - 1].dist || 1;
+  let minH = Infinity;
+  let maxH = -Infinity;
+  for (const p of profile) {
+    if (p.height < minH) minH = p.height;
+    if (p.height > maxH) maxH = p.height;
+  }
+  if (maxH - minH < 1) {
+    const mid = (maxH + minH) / 2;
+    minH = mid - 0.5;
+    maxH = mid + 0.5;
+  }
+  const pts = profile
+    .map((p) => {
+      const x = pad + (p.dist / maxDist) * (W - pad - 8);
+      const y = H - 18 - ((p.height - minH) / (maxH - minH)) * (H - 30);
+      return `${x},${y}`;
+    })
+    .join(' ');
+  return (
+    <div className="profile-chart">
+      <div className="profile-chart-title">地形剖面</div>
+      <svg width={W} height={H}>
+        <polyline points={pts} fill="none" stroke="#5e35b1" strokeWidth={2} />
+        <text x={pad} y={H - 4} fontSize={10} fill="#8a7f68">
+          0m
+        </text>
+        <text x={W - 8} y={H - 4} fontSize={10} fill="#8a7f68" textAnchor="end">
+          {maxDist.toFixed(0)}m
+        </text>
+        <text x={2} y={14} fontSize={10} fill="#8a7f68">
+          {maxH.toFixed(1)}m
+        </text>
+        <text x={2} y={H - 18} fontSize={10} fill="#8a7f68">
+          {minH.toFixed(1)}m
+        </text>
+      </svg>
     </div>
   );
 }

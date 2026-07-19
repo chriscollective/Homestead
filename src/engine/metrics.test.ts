@@ -13,8 +13,18 @@ function makeProject(elements: HomesteadProject['elements']): HomesteadProject {
   return {
     name: 'test',
     boundary: square100,
+    terrain: null,
     elements,
-    settings: { northAngle: 0, gridVisible: true, gridSize: 5 },
+    settings: {
+      northAngle: 0,
+      gridVisible: true,
+      gridSize: 5,
+      showContours: false,
+      showSlope: false,
+      showZones: false,
+      contourInterval: 1,
+      homePosition: null,
+    },
   };
 }
 
@@ -104,6 +114,39 @@ describe('forestCoverageRatio', () => {
     const project = makeProject([]);
     project.boundary = [];
     expect(forestCoverageRatio(project, speciesMap)).toBe(0);
+  });
+
+  it('指定年份時依當年冠幅計算(M4)', () => {
+    const project = makeProject([
+      {
+        id: 'p1',
+        kind: 'plant',
+        speciesId: 'camphor',
+        position: { x: 50, y: 50 },
+        plantedYear: 0,
+      },
+    ]);
+    // 第 0 年冠幅 0.5m(半徑 0.25)→ 覆蓋趨近 0;第 20 年 = 成熟半徑 5m
+    const early = forestCoverageRatio(project, speciesMap, 0.5, 0);
+    const mature = forestCoverageRatio(project, speciesMap, 0.5, 20);
+    expect(early).toBeLessThan(mature);
+    expect(mature).toBeCloseTo(0.00785, 2);
+  });
+
+  it('種植前與移除後不計入覆蓋', () => {
+    const project = makeProject([
+      {
+        id: 'p1',
+        kind: 'plant',
+        speciesId: 'camphor',
+        position: { x: 50, y: 50 },
+        plantedYear: 5,
+        removedYear: 30,
+      },
+    ]);
+    expect(forestCoverageRatio(project, speciesMap, 1, 2)).toBe(0);
+    expect(forestCoverageRatio(project, speciesMap, 1, 40)).toBe(0);
+    expect(forestCoverageRatio(project, speciesMap, 1, 25)).toBeGreaterThan(0);
   });
 });
 
