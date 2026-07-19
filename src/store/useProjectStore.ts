@@ -61,6 +61,14 @@ function defaultSettings(): ProjectSettings {
     showZones: false,
     contourInterval: 1,
     homePosition: null,
+    showShadows: false,
+    showInsolation: false,
+    showFlow: false,
+    showWind: false,
+    sunMonth: 6,
+    sunHour: 14,
+    windDir: 'NE',
+    people: 4,
   };
 }
 

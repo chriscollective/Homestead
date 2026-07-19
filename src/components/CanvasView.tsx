@@ -21,6 +21,7 @@ import {
 import { ZONE_RADII } from '../engine/zones';
 import { newId, useProjectStore } from '../store/useProjectStore';
 import type { AreaType, PlacedElement, Point } from '../types';
+import { AnalysisLayers } from './AnalysisLayers';
 
 interface View {
   scale: number; // px / m
@@ -171,33 +172,31 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
     cancelDraft();
   }, [tool, cancelDraft]);
 
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+
+  // 注意:不可在 setDraft 的 updater 內呼叫 commit(副作用會被 React 重複執行)
   const finishDraft = useCallback(() => {
-    setDraft((points) => {
-      const clean = dedupe(points);
-      if (clean.length >= 3) {
-        if (tool === 'boundary') {
-          commit((p) => ({ ...p, boundary: clean }));
-          setTool('select');
-        } else if (tool === 'area') {
-          commit((p) => ({
-            ...p,
-            elements: [
-              ...p.elements,
-              { id: newId('area'), kind: 'area', areaType, polygon: clean },
-            ],
-          }));
-        } else if (tool === 'pond') {
-          commit((p) => ({
-            ...p,
-            elements: [
-              ...p.elements,
-              { id: newId('pond'), kind: 'water', waterType: 'pond', polygon: clean },
-            ],
-          }));
-        }
-      }
-      return [];
-    });
+    const clean = dedupe(draftRef.current);
+    setDraft([]);
+    if (clean.length < 3) return;
+    if (tool === 'boundary') {
+      commit((p) => ({ ...p, boundary: clean }));
+      setTool('select');
+    } else if (tool === 'area') {
+      commit((p) => ({
+        ...p,
+        elements: [...p.elements, { id: newId('area'), kind: 'area', areaType, polygon: clean }],
+      }));
+    } else if (tool === 'pond') {
+      commit((p) => ({
+        ...p,
+        elements: [
+          ...p.elements,
+          { id: newId('pond'), kind: 'water', waterType: 'pond', polygon: clean },
+        ],
+      }));
+    }
   }, [tool, areaType, commit, setTool]);
 
   // 鍵盤:Esc 取消、Delete 刪除選取元素
@@ -778,6 +777,9 @@ export function CanvasView({ svgRef }: { svgRef: React.RefObject<SVGSVGElement> 
               />
             );
           })}
+
+          {/* 環境分析圖層(M7:陰影/日照/水流/風) */}
+          <AnalysisLayers project={project} viewYear={viewYear} />
 
           {/* 分區距離環(M13 分析層) */}
           {project.settings.showZones && home && (

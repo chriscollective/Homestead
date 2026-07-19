@@ -106,6 +106,16 @@ export interface ProjectSettings {
   showZones: boolean;
   contourInterval: 0.5 | 1;
   homePosition: Point | null; // 住家位置(M13 分區分析中心)
+  // M7 環境分析
+  showShadows: boolean;
+  showInsolation: boolean;
+  showFlow: boolean;
+  showWind: boolean;
+  sunMonth: number; // 1-12
+  sunHour: number; // 6-18(太陽時)
+  windDir: 'NE' | 'SW' | 'E';
+  // M9 自給自足
+  people: number;
 }
 
 export interface HomesteadProject {

@@ -1,7 +1,9 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
+import { AnalysisPanel } from './components/AnalysisPanel';
 import { CanvasView } from './components/CanvasView';
 import { Dashboard } from './components/Dashboard';
 import { LayersPanel } from './components/LayersPanel';
+import { SustainPanel } from './components/SustainPanel';
 import { PropertiesPanel } from './components/PropertiesPanel';
 import { SpeciesPalette } from './components/SpeciesPalette';
 import { TerrainPanel } from './components/TerrainPanel';
@@ -152,6 +154,8 @@ export default function App() {
         <aside className="sidebar">
           <Dashboard />
           <LayersPanel />
+          {viewMode === '2d' && <AnalysisPanel />}
+          <SustainPanel />
           {viewMode === '2d' && tool === 'terrain' && <TerrainPanel />}
           {viewMode === '2d' &&
             (selectedId ? (
