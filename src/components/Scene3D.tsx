@@ -3,6 +3,7 @@ import { Line, OrbitControls, Sky } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { plantForm } from '../data/plantForms';
 import { speciesById } from '../data/plants';
 import { boundingBox } from '../engine/geometry';
 import { canopyRadiusAtAge, interpolateCurve, isPlantAlive } from '../engine/growth';
@@ -174,55 +175,275 @@ function FlatPolygon({
   );
 }
 
-const FOLIAGE_COLORS: Record<string, string> = {
-  tree_fruit: '#4f9e6b',
-  tree_forest: '#2d6a4f',
-  shrub: '#79b791',
-  bamboo: '#84a85c',
-};
+/** 依位置產生固定亂數(0~1):每株樹有穩定的個體差異(旋轉/大小微變) */
+function seededJitter(x: number, y: number): number {
+  const v = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+  return v - Math.floor(v);
+}
 
-/** 低模樹:樹幹圓柱 + 樹冠(針葉錐/闊葉球/竹柱) */
-function Tree({
+/**
+ * 低模植物模型:依物種造型檔(plantForms)組合 3~8 個簡單幾何體,
+ * 30 種植物各有辨識度(寬圓冠/傘形/錐形/桿叢/大葉…),面數依然極低。
+ */
+function PlantModel({
   position,
-  categoryKey,
+  speciesId,
+  category,
   height,
   canopyRadius,
   terrain,
 }: {
   position: Point;
-  categoryKey: string;
+  speciesId: string;
+  category: 'tree_fruit' | 'tree_forest' | 'shrub' | 'bamboo';
   height: number;
   canopyRadius: number;
   terrain: Terrain | null;
 }) {
+  const form = plantForm(speciesId, category);
   const groundY = elevation(terrain, position);
-  const trunkH = Math.max(height * 0.3, 0.2);
-  const crownH = Math.max(height - trunkH, 0.3);
-  const r = Math.max(canopyRadius, 0.25);
-  const color = FOLIAGE_COLORS[categoryKey] ?? FOLIAGE_COLORS.tree_fruit;
+  const j = seededJitter(position.x, position.y);
+  const h = Math.max(height, 0.4) * (0.92 + j * 0.16);
+  const r = Math.max(canopyRadius, 0.28) * (0.92 + ((j * 7.31) % 1) * 0.16);
+  const f1 = form.foliage;
+  const f2 = form.foliage2 ?? form.foliage;
+  const trunkColor = form.trunk ?? '#7a5a3a';
+
+  const trunk = (frac: number, thin = 1) => (
+    <mesh position={[0, (h * frac) / 2, 0]} castShadow>
+      <cylinderGeometry
+        args={[Math.max(r * 0.07, 0.045) * thin, Math.max(r * 0.11, 0.06) * thin, h * frac, 6]}
+      />
+      <meshStandardMaterial color={trunkColor} flatShading />
+    </mesh>
+  );
+
+  const blob = (
+    px: number,
+    py: number,
+    pz: number,
+    radius: number,
+    sy: number,
+    color: string,
+    shadow = false
+  ) => (
+    <mesh position={[px, py, pz]} scale={[1, sy, 1]} castShadow={shadow}>
+      <sphereGeometry args={[radius, 7, 5]} />
+      <meshStandardMaterial color={color} flatShading />
+    </mesh>
+  );
+
+  // 花/果點綴:3 顆小球(僅近看可辨,幾乎無效能成本)
+  const flowers =
+    form.flower &&
+    [0.4, 2.3, 4.4].map((a, i) => (
+      <mesh
+        key={`fl${i}`}
+        position={[
+          Math.cos(a + j * 6) * r * 0.75,
+          h * 0.72 + Math.sin(a * 2) * r * 0.2,
+          Math.sin(a + j * 6) * r * 0.75,
+        ]}
+      >
+        <sphereGeometry args={[Math.max(r * 0.09, 0.06), 5, 4]} />
+        <meshStandardMaterial color={form.flower} flatShading />
+      </mesh>
+    ));
+
+  let body: React.ReactNode;
+  switch (form.crown) {
+    case 'spreading': {
+      // 寬展冠:比高更寬(芒果/樟樹/茄苳)
+      const tH = h * 0.28;
+      const cH = h - tH;
+      const cy = tH + cH * 0.5;
+      body = (
+        <>
+          {trunk(0.34, 1.4)}
+          <mesh position={[0, cy, 0]} scale={[1.35, (cH / (r * 2)) * 0.9, 1.35]} castShadow>
+            <sphereGeometry args={[r, 8, 6]} />
+            <meshStandardMaterial color={f1} flatShading />
+          </mesh>
+          {blob(r * 0.85, cy - cH * 0.15, r * 0.3, r * 0.55, 0.8, f2)}
+          {blob(-r * 0.8, cy - cH * 0.1, -r * 0.35, r * 0.5, 0.8, f2)}
+        </>
+      );
+      break;
+    }
+    case 'conical': {
+      // 針葉層疊(肖楠/楓香)
+      const tH = h * 0.12;
+      const cH = h - tH;
+      body = (
+        <>
+          {trunk(0.2)}
+          <mesh position={[0, tH + cH * 0.28, 0]} castShadow>
+            <coneGeometry args={[r, cH * 0.55, 7]} />
+            <meshStandardMaterial color={f1} flatShading />
+          </mesh>
+          <mesh position={[0, tH + cH * 0.6, 0]} castShadow>
+            <coneGeometry args={[r * 0.72, cH * 0.45, 7]} />
+            <meshStandardMaterial color={f2} flatShading />
+          </mesh>
+          <mesh position={[0, tH + cH * 0.85, 0]}>
+            <coneGeometry args={[r * 0.45, cH * 0.32, 7]} />
+            <meshStandardMaterial color={f1} flatShading />
+          </mesh>
+        </>
+      );
+      break;
+    }
+    case 'columnar': {
+      // 高瘦橢圓(酪梨/波羅蜜/烏心石)
+      const tH = h * 0.22;
+      const cH = h - tH;
+      body = (
+        <>
+          {trunk(0.3)}
+          <mesh position={[0, tH + cH * 0.5, 0]} scale={[0.85, cH / (r * 2), 0.85]} castShadow>
+            <sphereGeometry args={[r, 7, 6]} />
+            <meshStandardMaterial color={f1} flatShading />
+          </mesh>
+          {blob(r * 0.4, tH + cH * 0.75, r * 0.3, r * 0.4, 1, f2)}
+        </>
+      );
+      break;
+    }
+    case 'umbrella': {
+      // 傘形平頂(相思樹)
+      const tH = h * 0.55;
+      body = (
+        <>
+          {trunk(0.62)}
+          <mesh position={[0, tH + r * 0.3, 0]} scale={[1.5, 0.4, 1.5]} castShadow>
+            <sphereGeometry args={[r, 8, 6]} />
+            <meshStandardMaterial color={f1} flatShading />
+          </mesh>
+          {blob(r * 0.6, tH + r * 0.15, 0, r * 0.5, 0.45, f2)}
+        </>
+      );
+      break;
+    }
+    case 'open': {
+      // 疏朗冠:分離的小團塊(苦楝/九芎/芭樂)
+      const tH = h * 0.42;
+      body = (
+        <>
+          {trunk(0.55)}
+          {blob(0, tH + r * 0.5, 0, r * 0.62, 0.9, f1, true)}
+          {blob(r * 0.62, tH + r * 0.15, r * 0.2, r * 0.42, 0.85, f2)}
+          {blob(-r * 0.55, tH + r * 0.35, -r * 0.25, r * 0.45, 0.85, f2)}
+        </>
+      );
+      break;
+    }
+    case 'palm': {
+      // 單幹傘頂(木瓜):細直幹 + 放射葉
+      const tH = h * 0.78;
+      body = (
+        <>
+          {trunk(0.82, 0.8)}
+          {[0, 1, 2, 3, 4].map((i) => {
+            const a = (i / 5) * Math.PI * 2;
+            return (
+              <group key={i} rotation={[0, -a, 0]}>
+                <mesh
+                  position={[r * 0.55, tH, 0]}
+                  rotation={[0, 0, -0.5]}
+                  scale={[r * 0.75, r * 0.14, r * 0.3]}
+                >
+                  <sphereGeometry args={[1, 6, 4]} />
+                  <meshStandardMaterial color={i % 2 ? f1 : f2} flatShading />
+                </mesh>
+              </group>
+            );
+          })}
+        </>
+      );
+      break;
+    }
+    case 'banana': {
+      // 大型拱葉(香蕉):粗短綠假莖 + 上揚大葉
+      const tH = h * 0.45;
+      body = (
+        <>
+          {trunk(0.5, 1.6)}
+          {[0, 1, 2, 3, 4].map((i) => {
+            const a = (i / 5) * Math.PI * 2 + 0.4;
+            return (
+              <group key={i} rotation={[0, -a, 0]}>
+                <mesh
+                  position={[r * 0.5, tH + h * 0.22, 0]}
+                  rotation={[0, 0, -0.85]}
+                  scale={[r * 0.95, r * 0.16, r * 0.38]}
+                >
+                  <sphereGeometry args={[1, 6, 4]} />
+                  <meshStandardMaterial color={i % 2 ? f1 : f2} flatShading />
+                </mesh>
+              </group>
+            );
+          })}
+        </>
+      );
+      break;
+    }
+    case 'bamboo': {
+      // 桿叢(竹類):3 支細桿 + 頂部葉團
+      const caneR = Math.max(r * 0.06, 0.04);
+      body = (
+        <>
+          {[0, 1, 2].map((i) => {
+            const a = (i / 3) * Math.PI * 2;
+            const ox = Math.cos(a) * r * 0.28;
+            const oz = Math.sin(a) * r * 0.28;
+            return (
+              <group key={i}>
+                <mesh position={[ox, h * 0.5, oz]} rotation={[oz * 0.03, 0, -ox * 0.03]} castShadow>
+                  <cylinderGeometry args={[caneR, caneR * 1.2, h, 5]} />
+                  <meshStandardMaterial color={trunkColor} flatShading />
+                </mesh>
+                {blob(ox * 1.6, h * (0.78 + i * 0.06), oz * 1.6, r * 0.5, 0.55, i % 2 ? f1 : f2)}
+              </group>
+            );
+          })}
+        </>
+      );
+      break;
+    }
+    case 'shrub': {
+      // 灌木叢:貼地多球團
+      body = (
+        <>
+          {blob(0, h * 0.5, 0, r * 0.85, (h / (r * 1.7)) * 0.85, f1, true)}
+          {blob(r * 0.55, h * 0.35, r * 0.2, r * 0.5, 0.8, f2)}
+          {blob(-r * 0.5, h * 0.4, -r * 0.25, r * 0.55, 0.8, f2)}
+        </>
+      );
+      break;
+    }
+    default: {
+      // round:圓球冠多球堆疊(龍眼/荔枝/柑橘…)
+      const tH = h * 0.3;
+      const cH = h - tH;
+      const cy = tH + cH * 0.5;
+      body = (
+        <>
+          {trunk(0.38)}
+          <mesh position={[0, cy, 0]} scale={[1, (cH / (r * 2)) * 0.95, 1]} castShadow>
+            <sphereGeometry args={[r, 8, 6]} />
+            <meshStandardMaterial color={f1} flatShading />
+          </mesh>
+          {blob(r * 0.6, cy + cH * 0.12, r * 0.25, r * 0.5, 0.9, f2)}
+          {blob(-r * 0.55, cy - cH * 0.05, r * 0.3, r * 0.45, 0.9, f2)}
+        </>
+      );
+    }
+  }
 
   return (
-    <group position={[position.x, groundY, position.y]}>
-      <mesh position={[0, trunkH / 2, 0]} castShadow>
-        <cylinderGeometry args={[Math.max(r * 0.08, 0.05), Math.max(r * 0.12, 0.07), trunkH, 6]} />
-        <meshStandardMaterial color="#7a5a3a" flatShading />
-      </mesh>
-      {categoryKey === 'tree_forest' ? (
-        <mesh position={[0, trunkH + crownH / 2, 0]} castShadow>
-          <coneGeometry args={[r, crownH, 8]} />
-          <meshStandardMaterial color={color} flatShading />
-        </mesh>
-      ) : categoryKey === 'bamboo' ? (
-        <mesh position={[0, trunkH + crownH / 2, 0]} castShadow>
-          <cylinderGeometry args={[r * 0.55, r * 0.8, crownH, 7]} />
-          <meshStandardMaterial color={color} flatShading />
-        </mesh>
-      ) : (
-        <mesh position={[0, trunkH + crownH / 2, 0]} scale={[1, crownH / (r * 2) || 1, 1]} castShadow>
-          <sphereGeometry args={[r, 8, 6]} />
-          <meshStandardMaterial color={color} flatShading />
-        </mesh>
-      )}
+    <group position={[position.x, groundY, position.y]} rotation={[0, j * Math.PI * 2, 0]}>
+      {body}
+      {flowers}
     </group>
   );
 }
@@ -523,10 +744,11 @@ export default function Scene3D() {
           if (!species || !isPlantAlive(el.plantedYear, el.removedYear, viewYear)) return null;
           const age = viewYear - el.plantedYear;
           return (
-            <Tree
+            <PlantModel
               key={el.id}
               position={el.position}
-              categoryKey={species.category}
+              speciesId={el.speciesId}
+              category={species.category}
               height={interpolateCurve(species.growth.heightCurve, age)}
               canopyRadius={canopyRadiusAtAge(species.growth.canopyCurve, age)}
               terrain={project.terrain}
@@ -549,10 +771,11 @@ export default function Scene3D() {
             const r = Math.max(canopyRadiusAtAge(species.growth.canopyCurve, age), 0.2);
             if (hp.isTree) {
               return (
-                <Tree
+                <PlantModel
                   key={`hg${i}`}
                   position={hp.position}
-                  categoryKey={species.category}
+                  speciesId={hp.speciesId}
+                  category={species.category}
                   height={h}
                   canopyRadius={r}
                   terrain={project.terrain}
@@ -567,7 +790,7 @@ export default function Scene3D() {
                 scale={[1, Math.max(h, 0.3) / (r * 2) || 1, 1]}
               >
                 <sphereGeometry args={[r, 6, 5]} />
-                <meshStandardMaterial color="#79b791" flatShading />
+                <meshStandardMaterial color={plantForm(hp.speciesId, species.category).foliage} flatShading />
               </mesh>
             );
           })}
