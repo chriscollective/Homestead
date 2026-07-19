@@ -7,7 +7,7 @@ import { speciesById } from '../data/plants';
 import { boundingBox } from '../engine/geometry';
 import { canopyRadiusAtAge, interpolateCurve, isPlantAlive } from '../engine/growth';
 import { generateHedgePlants } from '../engine/hedge';
-import { sampleHeight } from '../engine/terrain';
+import { applyBrush, createTerrain, sampleHeight } from '../engine/terrain';
 import { useProjectStore } from '../store/useProjectStore';
 import type { HomesteadProject, Point, Terrain } from '../types';
 
@@ -16,8 +16,90 @@ function elevation(terrain: Terrain | null, p: Point): number {
   return terrain ? sampleHeight(terrain, p) : 0;
 }
 
-/** 地形網格(heightmap → 起伏面) */
-function TerrainMesh({ project }: { project: HomesteadProject }) {
+/** 地形網格(heightmap → 起伏面);塑形模式下可直接以筆刷拖曳雕塑 */
+function TerrainMesh({
+  project,
+  sculptMode,
+  controlsRef,
+}: {
+  project: HomesteadProject;
+  sculptMode: boolean;
+  controlsRef: React.MutableRefObject<{ enabled: boolean } | null>;
+}) {
+  const brush = useProjectStore((s) => s.brush);
+  const beginDrag = useProjectStore((s) => s.beginDrag);
+  const transient = useProjectStore((s) => s.transient);
+  const endDrag = useProjectStore((s) => s.endDrag);
+  const [hover, setHover] = useState<Point | null>(null);
+  const paintingRef = useRef(false);
+
+  const applyAt = (worldX: number, worldZ: number) => {
+    const pt = { x: worldX, y: worldZ };
+    transient((proj) => {
+      const t = proj.terrain ?? createTerrain(proj.boundary);
+      return {
+        ...proj,
+        terrain: { ...t, grid: applyBrush(t, pt, brush.radius, brush.mode, brush.strength) },
+      };
+    });
+  };
+
+  // 拖出網格外仍要結束筆畫
+  useEffect(() => {
+    const up = () => {
+      if (paintingRef.current) {
+        paintingRef.current = false;
+        endDrag();
+        if (controlsRef.current) controlsRef.current.enabled = true;
+      }
+    };
+    window.addEventListener('pointerup', up);
+    return () => window.removeEventListener('pointerup', up);
+  }, [endDrag, controlsRef]);
+
+  const inner = <TerrainMeshGeometry project={project} />;
+
+  if (!sculptMode) return inner;
+
+  return (
+    <>
+      <group
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          if (controlsRef.current) controlsRef.current.enabled = false; // 同步鎖住環繞,避免邊刷邊轉
+          paintingRef.current = true;
+          beginDrag();
+          applyAt(e.point.x, e.point.z);
+        }}
+        onPointerMove={(e) => {
+          setHover({ x: e.point.x, y: e.point.z });
+          if (paintingRef.current) applyAt(e.point.x, e.point.z);
+        }}
+        onPointerLeave={() => setHover(null)}
+      >
+        {inner}
+      </group>
+      {/* 筆刷圈指示 */}
+      {hover && (
+        <mesh
+          position={[hover.x, elevation(project.terrain, hover) + 0.3, hover.y]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <ringGeometry args={[Math.max(brush.radius - 0.4, 0.1), brush.radius, 40]} />
+          <meshBasicMaterial
+            color={brush.mode === 'lower' ? '#b3541e' : '#f2e394'}
+            transparent
+            opacity={0.85}
+            depthTest={false}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      )}
+    </>
+  );
+}
+
+function TerrainMeshGeometry({ project }: { project: HomesteadProject }) {
   const geometry = useMemo(() => {
     const terrain = project.terrain;
     if (terrain) {
@@ -249,6 +331,10 @@ export default function Scene3D() {
   const project = useProjectStore((s) => s.project);
   const viewYear = useProjectStore((s) => s.viewYear);
   const [walkMode, setWalkMode] = useState(false);
+  const [sculptMode, setSculptMode] = useState(false);
+  const controlsRef = useRef<{ enabled: boolean } | null>(null);
+  const brush = useProjectStore((s) => s.brush);
+  const setBrush = useProjectStore((s) => s.setBrush);
 
   const { center, extent } = useMemo(() => {
     if (project.boundary.length < 3) return { center: { x: 50, y: 50 }, extent: 120 };
@@ -298,7 +384,11 @@ export default function Scene3D() {
           shadow-camera-bottom={-120}
         />
 
-        <TerrainMesh project={project} />
+        <TerrainMesh
+          project={project}
+          sculptMode={sculptMode && !walkMode}
+          controlsRef={controlsRef}
+        />
         {boundaryLine && <Line points={boundaryLine} color="#6b4f2a" lineWidth={2} />}
 
         {project.elements.map((el) => {
@@ -441,6 +531,7 @@ export default function Scene3D() {
           />
         ) : (
           <OrbitControls
+            ref={controlsRef as never}
             key={resetKey}
             target={[center.x, 0, center.y]}
             maxPolarAngle={Math.PI / 2 - 0.02}
@@ -465,10 +556,46 @@ export default function Scene3D() {
             ⌖ 全覽
           </button>
         )}
+        {!walkMode && (
+          <button
+            className={sculptMode ? 'active' : ''}
+            onClick={() => setSculptMode((v) => !v)}
+            title="直接在 3D 地形上拖曳筆刷塑形"
+          >
+            ⛰ 塑形
+          </button>
+        )}
+        {!walkMode && sculptMode && (
+          <>
+            {(['raise', 'lower', 'smooth'] as const).map((m) => (
+              <button
+                key={m}
+                className={brush.mode === m ? 'active' : ''}
+                onClick={() => setBrush({ mode: m })}
+              >
+                {{ raise: '⬆ 抬升', lower: '⬇ 下降', smooth: '〰 平滑' }[m]}
+              </button>
+            ))}
+            <label className="scene3d-hint">
+              半徑
+              <input
+                type="range"
+                min={2}
+                max={30}
+                value={brush.radius}
+                onChange={(e) => setBrush({ radius: Number(e.target.value) })}
+                style={{ width: 70, verticalAlign: 'middle' }}
+              />
+              {brush.radius}m
+            </label>
+          </>
+        )}
         <span className="scene3d-hint">
           {walkMode
             ? '點擊畫面鎖定視角,WASD 移動、滑鼠轉向,Esc 解鎖'
-            : '拖曳環繞、滾輪縮放、右鍵平移'}
+            : sculptMode
+              ? '在地面左鍵拖曳塑形(即時看到起伏);Ctrl+Z 復原'
+              : '拖曳環繞、滾輪縮放、右鍵平移'}
         </span>
       </div>
     </div>
