@@ -885,3 +885,55 @@ body {
 .primary-btn:hover {
   background: #24593f;
 }
+
+/* ── 自製對話框(取代被 iframe 沙箱擋掉的 confirm/alert)── */
+.app-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(61, 52, 37, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.app-dialog {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  max-width: 340px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.app-dialog p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--earth-dark);
+  margin-bottom: 14px;
+}
+
+.app-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.app-dialog-actions button {
+  padding: 7px 16px;
+  border-radius: 7px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.app-dialog-cancel {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--earth-dark);
+}
+
+.app-dialog-ok {
+  border: 1px solid var(--forest);
+  background: var(--forest);
+  color: #fff;
+}

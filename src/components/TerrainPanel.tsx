@@ -1,5 +1,6 @@
 // M5 地形筆刷設定面板(地形工具啟用時顯示)
 import { createTerrain, type BrushMode } from '../engine/terrain';
+import { appConfirm } from '../utils/dialog';
 import { useProjectStore } from '../store/useProjectStore';
 
 const MODES: { id: BrushMode; label: string }[] = [
@@ -14,10 +15,10 @@ export function TerrainPanel() {
   const terrain = useProjectStore((s) => s.project.terrain);
   const commit = useProjectStore((s) => s.commit);
 
-  const rebuild = () => {
+  const rebuild = async () => {
     if (
       terrain &&
-      !confirm('重建地形網格會清除目前的地勢塑形(可用 Ctrl+Z 復原),確定嗎?')
+      !(await appConfirm('重建地形網格會清除目前的地勢塑形(可用 Ctrl+Z 復原),確定嗎?'))
     ) {
       return;
     }
@@ -75,8 +76,8 @@ export function TerrainPanel() {
         <>
           <button
             className="danger-btn"
-            onClick={() => {
-              if (confirm('🚜 整地:將全部地形恢復平整?(可 Ctrl+Z 復原)')) {
+            onClick={async () => {
+              if (await appConfirm('🚜 整地:將全部地形恢復平整?(可 Ctrl+Z 復原)')) {
                 commit((p) =>
                   p.terrain
                     ? {

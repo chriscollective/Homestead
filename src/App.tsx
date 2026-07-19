@@ -17,6 +17,7 @@ import {
   serializeProject,
   useProjectStore,
 } from './store/useProjectStore';
+import { appAlert, appConfirm } from './utils/dialog';
 import { downloadText, exportSvgAsPng } from './utils/download';
 
 // three.js 僅在進入 3D 模式時載入(code splitting)
@@ -87,12 +88,12 @@ export default function App() {
       const text = await file.text();
       loadProject(parseProjectFile(text));
     } catch (err) {
-      alert(`匯入失敗:${err instanceof Error ? err.message : '未知錯誤'}`);
+      void appAlert(`匯入失敗:${err instanceof Error ? err.message : '未知錯誤'}`);
     }
   };
 
-  const onNewProject = () => {
-    if (confirm('確定要開新專案嗎?目前設計已自動儲存並可先匯出 JSON 備份。')) {
+  const onNewProject = async () => {
+    if (await appConfirm('確定要開新專案嗎?目前設計已自動儲存並可先匯出 JSON 備份。')) {
       resetProject();
     }
   };
