@@ -119,6 +119,30 @@ export function PropertiesPanel() {
             }
           />
         </label>
+        <label className="field">
+          <span>移除年份(留空 = 不移除)</span>
+          <input
+            type="number"
+            min={0}
+            max={50}
+            value={element.removedYear ?? ''}
+            placeholder="—"
+            onChange={(e) =>
+              commit((p) => ({
+                ...p,
+                elements: p.elements.map((el) =>
+                  el.id === element.id && el.kind === 'plant'
+                    ? {
+                        ...el,
+                        removedYear:
+                          e.target.value === '' ? undefined : Number(e.target.value) || 0,
+                      }
+                    : el
+                ),
+              }))
+            }
+          />
+        </label>
         <div className="stat-row">
           <span>位置</span>
           <strong>

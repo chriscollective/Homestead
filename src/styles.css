@@ -106,6 +106,269 @@ body {
   min-height: 0;
 }
 
+.canvas-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── 2D/3D 切換 ── */
+.view-mode-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.view-mode-toggle button {
+  padding: 6px 14px;
+  border: none;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--earth-dark);
+}
+
+.view-mode-toggle button.active {
+  background: var(--forest);
+  color: #fff;
+}
+
+/* ── 時間軸(M4)── */
+.timeline-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--panel-bg);
+  border-top: 1px solid var(--border);
+}
+
+.timeline-year {
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--earth);
+}
+
+.timeline-year strong {
+  font-size: 18px;
+  color: var(--forest);
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
+  min-width: 30px;
+  text-align: center;
+}
+
+.timeline-slider {
+  flex: 1;
+  accent-color: var(--forest);
+}
+
+.timeline-quick {
+  display: flex;
+  gap: 4px;
+}
+
+.timeline-quick button {
+  min-width: 30px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--earth-dark);
+}
+
+.timeline-quick button.active {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: #fff;
+}
+
+.timeline-compare-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--earth-dark);
+  white-space: nowrap;
+}
+
+/* ── 對比 Modal ── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(61, 52, 37, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.modal {
+  background: var(--panel-bg);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.modal-head h3 {
+  font-size: 15px;
+  color: var(--forest);
+}
+
+.modal-close {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 15px;
+  color: #8a7f68;
+}
+
+.compare-grid {
+  display: flex;
+  gap: 16px;
+}
+
+.compare-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.compare-side label {
+  font-size: 13px;
+  color: var(--earth);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.compare-side input {
+  width: 64px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 13px;
+}
+
+/* ── 地形面板(M5)── */
+.brush-modes {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.brush-modes .tool-sub-btn {
+  flex: 1;
+  padding: 6px 4px;
+}
+
+.terrain-panel small {
+  display: block;
+  color: #8a7f68;
+  font-size: 11px;
+  margin-top: 6px;
+}
+
+/* ── 圖層面板 ── */
+.layer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.layer-toggle select {
+  margin-left: auto;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.layers-panel small {
+  display: block;
+  color: #a89e85;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+/* ── 剖面圖 ── */
+.profile-chart {
+  position: absolute;
+  bottom: 44px;
+  right: 12px;
+  background: rgba(255, 253, 246, 0.95);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.profile-chart-title {
+  font-size: 12px;
+  color: var(--forest);
+  margin-bottom: 4px;
+}
+
+/* ── 3D 場景(M6)── */
+.scene3d-container {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.scene3d-container canvas {
+  display: block;
+}
+
+.scene3d-controls {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 253, 246, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 10px;
+}
+
+.scene3d-controls button {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--earth-dark);
+}
+
+.scene3d-controls button.active {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: #fff;
+}
+
+.scene3d-hint {
+  font-size: 12px;
+  color: #8a7f68;
+}
+
 /* ── 工具列 ── */
 .toolbar {
   width: 76px;
@@ -562,3 +825,4 @@ body {
 .tips ul {
   padding-left: 18px;
 }
+.scene3d-loading { flex: 1; display: flex; align-items: center; justify-content: center; color: #8a7f68; font-size: 14px; }

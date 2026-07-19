@@ -1,7 +1,7 @@
 // 設計原則檢查引擎(P1:森林覆蓋比例)— 規格書 M2「祖傳家園規則引擎」
 import type { HomesteadProject, PlantSpecies, Point } from '../types';
 import { boundingBox, pointInPolygon, polygonArea } from './geometry';
-import { matureCanopyRadius } from './growth';
+import { canopyRadiusAtAge, isPlantAlive, matureCanopyRadius } from './growth';
 
 export const FOREST_TARGET_RATIO = 0.5; // 祖傳家園原則:森林約佔一半
 
@@ -9,13 +9,15 @@ const TREE_CATEGORIES = new Set(['tree_fruit', 'tree_forest', 'bamboo']);
 
 /**
  * 森林覆蓋比例:以網格取樣估算(可正確處理樹冠與林地區塊的重疊)。
- * 取樣點落在「林地區塊內」或「任一喬木/竹類成熟樹冠投影圈內」即視為森林覆蓋。
+ * 取樣點落在「林地區塊內」或「任一喬木/竹類樹冠投影圈內」即視為森林覆蓋。
  * @param sampleStep 取樣間距(m),1 公頃約 10000 點,足夠即時計算
+ * @param year 指定年份時依當年冠幅計算(M4);未指定則以成熟冠幅計算
  */
 export function forestCoverageRatio(
   project: HomesteadProject,
   speciesById: Map<string, PlantSpecies>,
-  sampleStep = 1
+  sampleStep = 1,
+  year?: number
 ): number {
   const boundary = project.boundary;
   if (boundary.length < 3) return 0;
@@ -29,7 +31,14 @@ export function forestCoverageRatio(
     } else if (el.kind === 'plant') {
       const species = speciesById.get(el.speciesId);
       if (species && TREE_CATEGORIES.has(species.category)) {
-        const radius = matureCanopyRadius(species.growth.canopyCurve);
+        let radius: number;
+        if (year === undefined) {
+          radius = matureCanopyRadius(species.growth.canopyCurve);
+        } else if (isPlantAlive(el.plantedYear, el.removedYear, year)) {
+          radius = canopyRadiusAtAge(species.growth.canopyCurve, year - el.plantedYear);
+        } else {
+          radius = 0;
+        }
         if (radius > 0) canopies.push({ center: el.position, radius });
       }
     }

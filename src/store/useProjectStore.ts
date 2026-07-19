@@ -1,19 +1,34 @@
 import { create } from 'zustand';
+import type { BrushMode } from '../engine/terrain';
 import type {
   AreaType,
   HomesteadProject,
   PlacedElement,
   Point,
   ProjectFile,
+  ProjectSettings,
+  Terrain,
 } from '../types';
 import { PROJECT_FILE_VERSION } from '../types';
 
-export type Tool = 'select' | 'boundary' | 'plant' | 'area' | 'pond' | 'measure';
+export type Tool =
+  | 'select'
+  | 'boundary'
+  | 'plant'
+  | 'area'
+  | 'pond'
+  | 'measure'
+  | 'terrain'
+  | 'profile'
+  | 'home';
+
+export type ViewMode = '2d' | '3d';
 
 /** undo/redo 快照:僅含設計資料,不含檢視設定 */
 interface Snapshot {
   boundary: Point[];
   elements: PlacedElement[];
+  terrain: Terrain | null;
 }
 
 const STORAGE_KEY = 'homestead-planner:project';
@@ -36,12 +51,35 @@ function defaultBoundary(): Point[] {
   ];
 }
 
+function defaultSettings(): ProjectSettings {
+  return {
+    northAngle: 0,
+    gridVisible: true,
+    gridSize: 5,
+    showContours: false,
+    showSlope: false,
+    showZones: false,
+    contourInterval: 1,
+    homePosition: null,
+  };
+}
+
 export function createDefaultProject(): HomesteadProject {
   return {
     name: '我的家園',
     boundary: defaultBoundary(),
+    terrain: null,
     elements: [],
-    settings: { northAngle: 0, gridVisible: true, gridSize: 5 },
+    settings: defaultSettings(),
+  };
+}
+
+/** 舊版存檔遷移:補齊 Phase 2 新增欄位 */
+function normalizeProject(raw: HomesteadProject): HomesteadProject {
+  return {
+    ...raw,
+    terrain: raw.terrain ?? null,
+    settings: { ...defaultSettings(), ...raw.settings },
   };
 }
 
@@ -58,7 +96,7 @@ function loadInitialProject(): HomesteadProject {
       Array.isArray(file.project.elements) &&
       file.project.settings
     ) {
-      return file.project;
+      return normalizeProject(file.project);
     }
   } catch {
     // 格式錯誤時回退為預設專案
@@ -87,14 +125,19 @@ export function parseProjectFile(raw: string): HomesteadProject {
   ) {
     throw new Error('檔案格式不正確');
   }
-  return file.project;
+  return normalizeProject(file.project);
 }
 
 function snapshotOf(project: HomesteadProject): Snapshot {
   return {
     boundary: project.boundary,
     elements: project.elements,
+    terrain: project.terrain,
   };
+}
+
+function restoreSnapshot(project: HomesteadProject, s: Snapshot): HomesteadProject {
+  return { ...project, boundary: s.boundary, elements: s.elements, terrain: s.terrain };
 }
 
 interface ProjectState {
@@ -109,12 +152,18 @@ interface ProjectState {
   areaType: AreaType;
   selectedSpeciesId: string;
   selectedId: string | null; // 元素 id 或 'boundary'
+  viewYear: number; // M4 時間軸目前年份
+  viewMode: ViewMode; // 2D / 3D
+  brush: { mode: BrushMode; radius: number; strength: number }; // M5 地形筆刷
 
   // ── 動作 ──
   setTool: (tool: Tool) => void;
   setAreaType: (t: AreaType) => void;
   setSelectedSpecies: (id: string) => void;
   select: (id: string | null) => void;
+  setViewYear: (year: number) => void;
+  setViewMode: (mode: ViewMode) => void;
+  setBrush: (patch: Partial<ProjectState['brush']>) => void;
 
   /** 記錄歷史後套用變更 */
   commit: (fn: (p: HomesteadProject) => HomesteadProject) => void;
@@ -143,11 +192,17 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   areaType: 'forest',
   selectedSpeciesId: 'mango',
   selectedId: null,
+  viewYear: 10,
+  viewMode: '2d',
+  brush: { mode: 'raise', radius: 8, strength: 0.3 },
 
   setTool: (tool) => set({ tool, selectedId: null }),
   setAreaType: (areaType) => set({ areaType }),
   setSelectedSpecies: (selectedSpeciesId) => set({ selectedSpeciesId }),
   select: (selectedId) => set({ selectedId }),
+  setViewYear: (viewYear) => set({ viewYear }),
+  setViewMode: (viewMode) => set({ viewMode }),
+  setBrush: (patch) => set({ brush: { ...get().brush, ...patch } }),
 
   commit: (fn) => {
     const { project, past } = get();
@@ -184,7 +239,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({
       past: past.slice(0, -1),
       future: [snapshotOf(project), ...future],
-      project: { ...project, boundary: prev.boundary, elements: prev.elements },
+      project: restoreSnapshot(project, prev),
       selectedId: null,
       pendingSnapshot: null,
     });
@@ -197,7 +252,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({
       past: [...past, snapshotOf(project)],
       future: future.slice(1),
-      project: { ...project, boundary: next.boundary, elements: next.elements },
+      project: restoreSnapshot(project, next),
       selectedId: null,
       pendingSnapshot: null,
     });
@@ -214,7 +269,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   loadProject: (project) =>
-    set({ project, past: [], future: [], selectedId: null, pendingSnapshot: null }),
+    set({
+      project: normalizeProject(project),
+      past: [],
+      future: [],
+      selectedId: null,
+      pendingSnapshot: null,
+    }),
 
   resetProject: () =>
     set({

@@ -12,19 +12,23 @@ import {
   forestCoverageRatio,
   spacingConflicts,
 } from '../engine/metrics';
+import { zoneWarnings } from '../engine/zones';
 import { useProjectStore } from '../store/useProjectStore';
 
 export function Dashboard() {
   const project = useProjectStore((s) => s.project);
+  const viewYear = useProjectStore((s) => s.viewYear);
 
   const areaM2 = useMemo(() => polygonArea(project.boundary), [project.boundary]);
   const perimeter = useMemo(() => polygonPerimeter(project.boundary), [project.boundary]);
 
   const forestRatio = useMemo(() => {
-    // 取樣間距依地界規模調整,維持互動流暢
+    // 取樣間距依地界規模調整,維持互動流暢;依時間軸年份計算當年冠幅
     const step = Math.max(1, Math.sqrt(areaM2) / 100);
-    return forestCoverageRatio(project, speciesById, step);
-  }, [project, areaM2]);
+    return forestCoverageRatio(project, speciesById, step, viewYear);
+  }, [project, areaM2, viewYear]);
+
+  const warnings = useMemo(() => zoneWarnings(project), [project]);
 
   const stats = useMemo(() => elementStats(project), [project]);
   const conflictCount = useMemo(
@@ -57,7 +61,7 @@ export function Dashboard() {
 
           <div className="forest-meter">
             <div className="forest-meter-head">
-              <span>森林覆蓋比例</span>
+              <span>森林覆蓋比例(第 {viewYear} 年)</span>
               <strong className={ratioClass}>{ratioPct}%</strong>
             </div>
             <div className="forest-meter-bar">
@@ -88,6 +92,11 @@ export function Dashboard() {
           {conflictCount > 0 && (
             <div className="warning">⚠ {conflictCount} 組喬木間距過近(依成熟冠幅),畫布上以紅色虛線標示</div>
           )}
+          {warnings.map((w) => (
+            <div key={w.elementId} className="warning">
+              🧭 {w.message}
+            </div>
+          ))}
         </>
       ) : (
         <div className="advice">尚未繪製地界 — 請用「⬠ 繪製地界」工具開始</div>
