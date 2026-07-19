@@ -72,9 +72,31 @@ export function TerrainPanel() {
         想更直觀,切到 <strong>3D 立體</strong> 按「⛰ 塑形」直接在立體地形上雕塑
       </small>
       {terrain && (
-        <button className="danger-btn" onClick={rebuild}>
-          重建地形網格(地界變更後用)
-        </button>
+        <>
+          <button
+            className="danger-btn"
+            onClick={() => {
+              if (confirm('🚜 整地:將全部地形恢復平整?(可 Ctrl+Z 復原)')) {
+                commit((p) =>
+                  p.terrain
+                    ? {
+                        ...p,
+                        terrain: {
+                          ...p.terrain,
+                          grid: p.terrain.grid.map((row) => row.map(() => 0)),
+                        },
+                      }
+                    : p
+                );
+              }
+            }}
+          >
+            🚜 整地(恢復平整)
+          </button>
+          <button className="danger-btn" onClick={rebuild}>
+            重建地形網格(地界變更後用)
+          </button>
+        </>
       )}
     </div>
   );
