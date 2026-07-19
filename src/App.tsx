@@ -153,31 +153,28 @@ export default function App() {
           <TimelinePanel />
         </div>
         <aside className="sidebar">
+          {/* 當前工具/選取的操作面板置頂,選工具馬上就看得到 */}
+          {viewMode === '2d' && selectedId && <PropertiesPanel />}
+          {viewMode === '2d' && !selectedId && tool === 'plant' && <SpeciesPalette />}
+          {viewMode === '2d' && !selectedId && tool === 'building' && <BuildingPalette />}
+          {viewMode === '2d' && tool === 'terrain' && <TerrainPanel />}
+          {viewMode === '2d' && !selectedId && tool !== 'plant' && tool !== 'building' && tool !== 'terrain' && (
+            <div className="panel tips">
+              <h3>操作提示</h3>
+              <ul>
+                <li>⬠ 地界:逐點點擊繪製,雙擊或點起點閉合</li>
+                <li>🌳 植栽:選工具後在此選物種,再點擊畫布放置</li>
+                <li>⏳ 時間軸:拉動下方年份滑桿看家園長大</li>
+                <li>⛰ 地形:筆刷塑形;圖層開等高線/坡度</li>
+                <li>🏠 住家:放置後開分區環,檢查頻率-距離</li>
+                <li>滾輪縮放、空白處拖曳平移;Ctrl+Z 復原</li>
+              </ul>
+            </div>
+          )}
           <Dashboard />
           <LayersPanel />
           {viewMode === '2d' && <AnalysisPanel />}
           <SustainPanel />
-          {viewMode === '2d' && tool === 'terrain' && <TerrainPanel />}
-          {viewMode === '2d' &&
-            (selectedId ? (
-              <PropertiesPanel />
-            ) : tool === 'plant' ? (
-              <SpeciesPalette />
-            ) : tool === 'building' ? (
-              <BuildingPalette />
-            ) : tool !== 'terrain' ? (
-              <div className="panel tips">
-                <h3>操作提示</h3>
-                <ul>
-                  <li>⬠ 地界:逐點點擊繪製,雙擊或點起點閉合</li>
-                  <li>🌳 植栽:先選物種再點擊放置,圈圈為當年冠幅</li>
-                  <li>⏳ 時間軸:拉動下方年份滑桿看家園長大</li>
-                  <li>⛰ 地形:筆刷塑形;圖層開等高線/坡度</li>
-                  <li>🏠 住家:放置後開分區環,檢查頻率-距離</li>
-                  <li>滾輪縮放、空白處拖曳平移;Ctrl+Z 復原</li>
-                </ul>
-              </div>
-            ) : null)}
         </aside>
       </div>
     </div>
